@@ -1,0 +1,20 @@
+name: tests
+on:
+  push: {branches: [main]}
+  pull_request:
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y shellcheck
+          shellcheck -s sh core/lib.sh core/checks/*.sh dispatcher/dispatch.sh adapters/claude-code/pretooluse.sh install.sh
+      - name: run suites
+        run: |
+          for t in tests/*.sh; do echo "== $t"; "$t"; done
