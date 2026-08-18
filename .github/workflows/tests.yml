@@ -14,7 +14,10 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get install -y shellcheck
-          shellcheck -s sh core/lib.sh core/checks/*.sh dispatcher/dispatch.sh adapters/claude-code/pretooluse.sh install.sh
+          # excluded: SC1090/SC1091 dynamic source paths, SC2317 trap-invoked
+          # cleanup, SC2088 literal tilde matched in command text — all
+          # structural false positives here.
+          shellcheck -s sh -e SC1090,SC1091,SC2317,SC2088 core/lib.sh core/checks/*.sh dispatcher/dispatch.sh adapters/claude-code/pretooluse.sh install.sh
       - name: run suites
         run: |
           for t in tests/*.sh; do echo "== $t"; "$t"; done

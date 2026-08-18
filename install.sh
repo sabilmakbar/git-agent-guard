@@ -33,7 +33,7 @@ done
 command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 1; }
 
 say() { printf '%s\n' "$*"; }
-act() { [ "$dry" -eq 1 ] && say "[dry-run] $*" || say "$*"; }
+act() { if [ "$dry" -eq 1 ]; then say "[dry-run] $*"; else say "$*"; fi; }
 
 # ---------------------------------------------------------------- uninstall
 if [ "$uninstall" -eq 1 ]; then
