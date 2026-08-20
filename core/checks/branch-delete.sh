@@ -37,25 +37,25 @@ if [ -z "$base" ]; then
     done
 fi
 if [ -z "$base" ]; then
-    echo "Cannot determine the base branch to verify '$branch' is fully merged. Confirm with the user before deleting."
+    echo "Cannot determine the base branch to verify '$branch' is fully merged. Allowed next: run \`git fetch origin\` and retry, or ask the user which branch is the base."
     exit 3
 fi
 
 if ! git -C "$dir" merge-base --is-ancestor "refs/heads/$branch" "refs/remotes/$base" 2>/dev/null; then
-    echo "Branch '$branch' has commits not reached $base — deleting would strand them. Verify with \`git log $base..$branch\` and merge/push first, or confirm with the user."
+    echo "Branch '$branch' has commits not reached $base — deleting would strand them. Allowed next: run \`git log $base..$branch\` to show the user what would be lost, and let them decide; deletion stays blocked until the branch is fully merged."
     exit 1
 fi
 
 if git -C "$dir" rev-parse --verify --quiet "$branch@{upstream}" >/dev/null 2>&1; then
     ahead=$(git -C "$dir" rev-list --count "$branch@{upstream}..refs/heads/$branch" 2>/dev/null || echo 0)
     if [ "${ahead:-0}" -gt 0 ]; then
-        echo "Branch '$branch' has $ahead commit(s) not pushed to its upstream. Push or confirm with the user before deleting."
+        echo "Branch '$branch' has $ahead commit(s) not pushed to its upstream. Allowed next: run \`git push\` for '$branch' first, then retry the delete; it will pass once nothing is unpushed."
         exit 1
     fi
 fi
 
 if git -C "$dir" stash list 2>/dev/null | grep -q "WIP on $branch:"; then
-    echo "A stash entry reads 'WIP on $branch' — stashes survive branch deletion but get much harder to find once the name is gone. Surface it to the user before deleting."
+    echo "A stash entry reads 'WIP on $branch' — stashes survive branch deletion but get much harder to find once the name is gone. Allowed next: show the user \`git stash list\` output and let them decide; apply or drop the stash, then retry the delete."
     exit 1
 fi
 

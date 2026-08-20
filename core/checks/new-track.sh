@@ -20,5 +20,5 @@ git -C "$dir" rev-parse --git-dir >/dev/null 2>&1 || exit 0
 new_files=$(git -C "$dir" diff --cached --name-only --diff-filter=A 2>/dev/null)
 [ -n "$new_files" ] || exit 0
 
-echo "This commit tracks file(s) for the first time: $(printf '%s' "$new_files" | tr '\n' ' '). Newly-tracked files need their own explicit approval — confirm with the user that these belong in the repo (vs staying local-only) before committing."
+echo "This commit tracks file(s) for the first time: $(printf '%s' "$new_files" | tr '\n' ' '). Newly-tracked files need their own explicit approval. Allowed next: ask the user which of these belong in the repo; to commit the already-tracked changes now without them, run \`git restore --staged\` on the new paths, then \`git commit\` as before."
 exit 3
