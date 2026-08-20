@@ -22,3 +22,24 @@ support should use a real adapter instead (see `adapters/`).
   that remote (work vs personal). A wrong identity in public history is
   hard to scrub.
 - Never add agent-attribution footers to commit messages or PR bodies.
+
+## Judgment rules
+
+No hook can enforce these; they need an understanding of what a change means.
+They hold whether or not the enforcement layer is installed.
+
+- One logical change per commit. Split a mixed working tree into one commit per
+  logical arc, staging at the hunk level when a file holds unrelated edits
+  (`git apply --cached <patch>` where interactive staging is unavailable).
+  Propose the split before committing; never present "lump it all together" as
+  an equal option.
+- Commit messages are concise and factually grounded in that exact diff. State
+  what the change does; no essays, no incidental file names, no references to
+  internal trackers a reviewer cannot see. When the user dictates wording, use
+  it verbatim.
+- A release or version-bump PR contains only the bump and what is tightly
+  coupled to it (that version's changelog entry). Unrelated changes that
+  accumulated on the branch go in their own PR.
+- When the working tree is already dirty and a new task is about to start,
+  surface the pending changes first instead of building on top of them, so old
+  and new edits do not tangle into unsplittable commits.
