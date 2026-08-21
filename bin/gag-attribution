@@ -12,6 +12,10 @@
 
 set -u
 
+# Pinned deliberately, and deliberately generic. Left to its own default,
+# Claude Code names the model in the trailer ("Claude Sonnet 5", "Claude Haiku
+# 4.5", observed), so a repo accumulates a different co-author identity per
+# model and per model release. One stable identity keeps the history greppable.
 TRAILER='Co-Authored-By: Claude <noreply@anthropic.com>'
 cfg="${XDG_CONFIG_HOME:-$HOME/.config}/git-agent-guard"
 decisions="$cfg/attribution-decisions"

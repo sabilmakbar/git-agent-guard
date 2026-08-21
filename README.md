@@ -101,6 +101,12 @@ greppable later, and disclosure is the friendlier default in your own projects. 
 is also permanent, and some projects' contribution policies reject AI-attributed
 commits outright, so a trailer can get a pull request bounced.
 
+`include` pins a generic trailer, `Co-Authored-By: Claude <noreply@anthropic.com>`,
+rather than letting Claude Code use its own default. Its default names the model
+("Claude Sonnet 5", "Claude Haiku 4.5"), so a repo left to it accumulates a
+different co-author identity per model and per model release, and the history stops
+being greppable by one name.
+
 `include` writes `.claude/settings.local.json` in that repo, which overrides the
 global setting for that repo only. That file is the per-machine, untracked one, so
 the decision never enters the project's history; if it is not gitignored where you
