@@ -21,22 +21,36 @@ cmd=$(jq -r '.tool_input.command // empty' 2>/dev/null) || exit 0
 # Fast exit: nothing git/gh-shaped in the command.
 printf '%s' "$cmd" | grep -qE '(^|[;&|[:space:]])(git|gh)([[:space:]]|$)' || exit 0
 
+# Every check runs, and a deny outranks an ask. Otherwise a pending decision
+# (ask) reported by an early check would shadow a hard violation found by a
+# later one, and file order would decide what the user sees.
+deny_msg=""; ask_msg=""
 for check in "$checks_dir"/*.sh; do
     [ -x "$check" ] || continue
     # Git-layer-only checks declare themselves by marker and are skipped here.
     grep -q '^# layer: git-only' "$check" && continue
     msg=$("$check" "$cmd")
     rc=$?
-    # Contract: 0 pass, 1 deny, 3 ask; >=2 (other) is a check bug — never block on it.
-    case "$rc" in 1|3) ;; *) continue ;; esac
-    if [ "$(gag_mode)" = "advisory" ]; then
-        jq -n --arg m "git-agent-guard (advisory): $msg" \
-          '{hookSpecificOutput: {hookEventName: "PreToolUse", additionalContext: $m}}'
-    else
-        decision=deny; [ "$rc" -eq 3 ] && decision=ask
-        jq -n --arg m "$msg" --arg d "$decision" \
-          '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: $d, permissionDecisionReason: $m}}'
-    fi
-    exit 0
+    # Contract: 0 pass, 1 deny, 3 ask; anything else is a check bug — never block on it.
+    case "$rc" in
+        1) [ -n "$deny_msg" ] || deny_msg="$msg" ;;
+        3) [ -n "$ask_msg" ]  || ask_msg="$msg" ;;
+    esac
 done
+
+if [ -n "$deny_msg" ]; then
+    decision=deny; msg="$deny_msg"
+elif [ -n "$ask_msg" ]; then
+    decision=ask; msg="$ask_msg"
+else
+    exit 0
+fi
+
+if [ "$(gag_mode)" = "advisory" ]; then
+    jq -n --arg m "git-agent-guard (advisory): $msg" \
+      '{hookSpecificOutput: {hookEventName: "PreToolUse", additionalContext: $m}}'
+else
+    jq -n --arg m "$msg" --arg d "$decision" \
+      '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: $d, permissionDecisionReason: $m}}'
+fi
 exit 0

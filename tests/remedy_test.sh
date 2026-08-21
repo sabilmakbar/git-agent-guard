@@ -21,6 +21,17 @@ export GIT_CONFIG_SYSTEM=/dev/null
 export GIT_CEILING_DIRECTORIES="$sandbox"
 mkdir -p "$HOME"
 
+git config --global user.email t@example.invalid 2>/dev/null
+git config --global user.name t 2>/dev/null
+git config --global init.defaultBranch main 2>/dev/null
+git init -q "$sandbox/repo" 2>/dev/null
+mkdir -p "$XDG_CONFIG_HOME/git-agent-guard"
+# Record the key exactly as git reports it: on macOS mktemp hands back /var/...
+# while git resolves the physical /private/var/... path.
+printf '%s exclude\n' "$(git -C "$sandbox/repo" rev-parse --show-toplevel)" \
+  > "$XDG_CONFIG_HOME/git-agent-guard/attribution-decisions"
+cd "$sandbox/repo" || exit 1
+
 admissible() { # <cmd> : rc 0 when no check denies it (ask=3 also fails it:
                # a remedy must be run-through-clean, not another pause)
     for check in "$root"/core/checks/*.sh; do

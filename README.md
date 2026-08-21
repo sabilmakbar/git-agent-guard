@@ -30,7 +30,8 @@ history. The two kinds compose, and running both is sensible.
 | A first-time-tracked file needs its own yes | the commit pauses and asks, listing the files |
 | No deleting a branch with work still on it | refused unless merged, pushed, and no stash names it |
 | The right identity for the right remote | a push with the wrong `user.email` is refused (opt-in, see below) |
-| No agent-attribution footers | covered by a native setting, written at install |
+| Each repo decides whether commits disclose AI assistance | the first commit in an undecided repo pauses and asks, once |
+| No agent-attribution footer in PR bodies | covered by a native setting, written at install |
 
 Every check runs before the command does, from one hook on the agent's shell tool.
 Claude Code is the wired adapter today. The checks themselves are tool-agnostic
@@ -38,9 +39,9 @@ scripts with a three-exit-code contract, so adapters for other agent CLIs are sm
 and `adapters/generic/` has the rules as plain guidance for tools that cannot run
 hooks at all.
 
-A command that merely mentions a forbidden shape passes: quoted spans are stripped
-before matching, so a commit message or grep pattern containing the words `git add`
-trips nothing.
+A command that merely mentions a forbidden shape passes: quoted spans and heredoc
+bodies are stripped before matching, so a commit message, a grep pattern, or a script
+you are writing whose contents contain `git add ... && git commit` trips nothing.
 
 ## Two modes, and you must pick one
 
@@ -81,6 +82,30 @@ The install also sets Claude Code's `attribution` keys empty, which is the nativ
 to keep agent footers out of commit messages and PR bodies. If you already have
 `attribution` set to something, the installer reports it and leaves yours alone.
 
+### Whether commits say they were AI-assisted is decided per repo
+
+That empty `attribution.commit` is a starting position, not the answer: it means no
+commit silently gains a `Co-Authored-By` trailer before anyone chose. The choice
+itself belongs to the project, so the first commit in a repo with no recorded
+decision pauses and asks, once, and never again for that repo.
+
+```bash
+bin/gag-attribution include    # commits here carry a Co-Authored-By trailer
+bin/gag-attribution exclude    # they do not
+bin/gag-attribution default    # defer to the global setting, stop asking
+```
+
+Both directions are defensible, which is exactly why it is asked rather than
+assumed. A trailer discloses AI involvement to reviewers and makes the history
+greppable later, and disclosure is the friendlier default in your own projects. It
+is also permanent, and some projects' contribution policies reject AI-attributed
+commits outright, so a trailer can get a pull request bounced.
+
+`include` writes `.claude/settings.local.json` in that repo, which overrides the
+global setting for that repo only. That file is the per-machine, untracked one, so
+the decision never enters the project's history; if it is not gitignored where you
+run it, the command says so rather than editing `.gitignore` for you.
+
 ### Identity checking is opt-in
 
 The identity check needs to know which email belongs to which remote, and only you
@@ -104,10 +129,12 @@ agent receives the refusal and its message, corrects itself, and carries on. A c
 stage-and-commit becomes two separate calls a few seconds later, without you touching
 anything.
 
-The two asking checks are different, and pausing you is their job. A commit that
-tracks a new file for the first time, and a push to a remote your identities file does
-not cover, both stop and wait for your answer, because those decisions are yours and
-not the agent's.
+The asking checks are different, and pausing you is their job. A commit that tracks a
+new file for the first time, the first commit in a repo whose attribution decision has
+not been made, and a push to a remote your identities file does not cover all stop and
+wait for your answer, because those decisions are yours and not the agent's. When two
+checks fire at once, a refusal is what you see: a hard violation outranks a pending
+decision.
 
 ## Is it working?
 

@@ -13,6 +13,20 @@ mkdir -p "$HOME"
 
 adapter="$root/adapters/claude-code/pretooluse.sh"
 
+# Work inside a sandbox repo whose attribution decision is already recorded, so
+# the one-time attribution ask does not confound every commit-shaped case.
+export GIT_CONFIG_GLOBAL="$sandbox/home/.gitconfig"
+export GIT_CONFIG_SYSTEM=/dev/null
+export GIT_CEILING_DIRECTORIES="$sandbox"
+git config --global user.email t@example.invalid
+git config --global user.name t
+git config --global init.defaultBranch main
+git init -q "$sandbox/repo"
+mkdir -p "$XDG_CONFIG_HOME/git-agent-guard"
+printf '%s exclude\n' "$(git -C "$sandbox/repo" rev-parse --show-toplevel)" \
+  > "$XDG_CONFIG_HOME/git-agent-guard/attribution-decisions"
+cd "$sandbox/repo" || exit 1
+
 emit() { jq -n --arg c "$1" '{tool_input: {command: $c}}'; }
 
 t() { # <name> <expect: deny|allow|advisory> <command>
@@ -22,6 +36,7 @@ t() { # <name> <expect: deny|allow|advisory> <command>
     _ctx=$(printf '%s' "$_out" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)
     _got=allow
     [ "$_dec" = "deny" ] && _got=deny
+    [ "$_dec" = "ask" ] && _got=ask
     [ -n "$_ctx" ] && _got=advisory
     if [ "$_got" = "$_want" ]; then pass=$((pass+1)); else
         fail=$((fail+1)); echo "FAIL: $_name (want $_want got $_got)"; fi
@@ -32,6 +47,14 @@ t "gh pr merge denied"          deny  'gh pr merge 7'
 t "plain add allowed"           allow 'git add -A'
 t "non-git command allowed"     allow 'ls -la'
 t "gh pr view allowed"          allow 'gh pr view 7 --json state'
+
+# deny must outrank a co-firing ask: undecided repo (ask) + chained call (deny)
+git init -q "$sandbox/undecided"
+( cd "$sandbox/undecided" && printf 'a\n' > f.txt && git add f.txt && git commit -qm init ) >/dev/null 2>&1
+cd "$sandbox/undecided" || exit 1
+t "deny outranks ask"           deny  'git add -A && git commit -m "x"'
+t "lone ask still asks"         ask   'git commit -m "x"'
+cd "$sandbox/repo" || exit 1
 
 mkdir -p "$XDG_CONFIG_HOME/git-agent-guard"
 echo MODE=advisory > "$XDG_CONFIG_HOME/git-agent-guard/config"

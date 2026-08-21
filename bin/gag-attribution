@@ -1,0 +1,61 @@
+#!/bin/sh
+# Record this repository's AI-attribution decision, once.
+#
+#   gag-attribution include   # commits carry a Co-Authored-By trailer
+#   gag-attribution exclude   # commits carry no trailer
+#   gag-attribution default   # defer to whatever the global setting says
+#
+# Run from inside the repository. `include` writes the repo's
+# .claude/settings.local.json, which overrides the global setting for this
+# repository only; the local settings file is the per-machine, untracked one,
+# so nothing about the decision enters the repo's history.
+
+set -u
+
+TRAILER='Co-Authored-By: Claude <noreply@anthropic.com>'
+cfg="${XDG_CONFIG_HOME:-$HOME/.config}/git-agent-guard"
+decisions="$cfg/attribution-decisions"
+
+choice="${1:-}"
+case "$choice" in
+    include|exclude|default) ;;
+    *) echo "usage: gag-attribution include|exclude|default" >&2; exit 2 ;;
+esac
+
+git rev-parse --git-dir >/dev/null 2>&1 || { echo "not inside a git repository" >&2; exit 2; }
+root=$(git rev-parse --show-toplevel)
+
+# Repo identity: the remote URL when there is one, so the decision follows the
+# project across clones; the path otherwise.
+key=$(git remote get-url origin 2>/dev/null) || key=""
+[ -n "$key" ] || key="$root"
+
+mkdir -p "$cfg"
+touch "$decisions"
+# Replace any previous decision for this key rather than accumulating.
+tmp="$decisions.tmp.$$"
+grep -v "^$(printf '%s' "$key" | sed 's/[[\.*^$/]/\\&/g') " "$decisions" > "$tmp" 2>/dev/null || :
+printf '%s %s\n' "$key" "$choice" >> "$tmp"
+mv "$tmp" "$decisions"
+echo "recorded: $key -> $choice"
+
+[ "$choice" = include ] || { echo "No repo-local settings written (global setting applies)."; exit 0; }
+
+# include: override the global suppression for this repository only.
+settings="$root/.claude/settings.local.json"
+mkdir -p "$root/.claude"
+if [ -f "$settings" ]; then
+    command -v jq >/dev/null 2>&1 || { echo "jq needed to merge into existing $settings" >&2; exit 1; }
+    jq --arg t "$TRAILER" '.attribution.commit = $t' "$settings" > "$settings.tmp" \
+      && mv "$settings.tmp" "$settings"
+else
+    printf '{\n  "attribution": {\n    "commit": "%s"\n  }\n}\n' "$TRAILER" > "$settings"
+fi
+echo "wrote $settings"
+
+# The local settings file is meant to stay out of history. Say so rather than
+# editing .gitignore, which is a tracked file and the user's to change.
+if ! git check-ignore -q .claude/settings.local.json 2>/dev/null; then
+    echo "NOTE: .claude/settings.local.json is not gitignored here. Add this line to .gitignore so it stays local:"
+    echo "  .claude/settings.local.json"
+fi
