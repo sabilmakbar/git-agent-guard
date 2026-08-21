@@ -46,6 +46,16 @@ t "commit alone allowed"             0 staging-separation.sh 'git commit -m "msg
 t "verbs only in message allowed"    0 staging-separation.sh 'git commit -m "git add and git commit docs"'
 t "verbs only in grep allowed"       0 staging-separation.sh 'grep -r "git add && git commit" docs/'
 t "path containing add allowed"      0 staging-separation.sh 'git status && cat notes/add-commit.md'
+t "heredoc body with verbs allowed" 0 staging-separation.sh 'cat > t.sh <<EOF
+git add f.txt && git commit -qm init
+EOF'
+t "heredoc quoted tag allowed"      0 staging-separation.sh 'cat > t.sh <<'"'"'SH'"'"'
+git add . && git commit -m x
+SH'
+t "real chain after heredoc denied"  1 staging-separation.sh 'cat > t.sh <<EOF
+hello
+EOF
+git add -A && git commit -m "x"'
 t "empty command allowed"            0 staging-separation.sh ''
 
 # --- pr-merge ---------------------------------------------------------------

@@ -9,10 +9,32 @@
 #   exit 3 = needs the user's judgment, ask; one human message on stdout
 #   other  = check error; adapters treat as pass and report (never lock the user out on a bug)
 
-# gag_strip_quoted CMD -> stdout: CMD with single- and double-quoted spans removed.
-# A command that merely NAMES a verb (grep pattern, commit message) must not match.
+# gag_strip_quoted CMD -> stdout: CMD with quoted spans and heredoc bodies
+# removed. A command that merely NAMES a verb must not match: grep patterns,
+# commit-message text, and heredoc payloads (writing a script or a test whose
+# CONTENT contains git commands) are all data rather than invocations. The
+# heredoc case is not hypothetical — it blocked two real edits to this repo
+# before being handled here.
 gag_strip_quoted() {
-    printf '%s' "$1" | sed "s/'[^']*'//g; s/\"[^\"]*\"//g"
+    printf '%s' "$1" | awk '
+        # Drop everything between a heredoc opener and its terminator line.
+        # Handles <<WORD, <<-WORD, <<"WORD" and <<\x27WORD\x27.
+        !inhd && match($0, /<<-?[[:space:]]*[\"\x27]?[A-Za-z_][A-Za-z0-9_]*[\"\x27]?/) {
+            tag = substr($0, RSTART, RLENGTH)
+            sub(/^<<-?[[:space:]]*/, "", tag)
+            gsub(/[\"\x27]/, "", tag)
+            inhd = 1; hdtag = tag
+            print substr($0, 1, RSTART - 1)
+            next
+        }
+        inhd {
+            line = $0
+            sub(/^[[:space:]]*/, "", line)
+            if (line == hdtag) { inhd = 0 }
+            next
+        }
+        { print }
+    ' | sed "s/'[^']*'//g; s/\"[^\"]*\"//g"
 }
 
 # gag_git_verb STRIPPED VERB -> rc 0 when `git VERB` is actually invoked.
