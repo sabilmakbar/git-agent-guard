@@ -67,6 +67,93 @@ printf '%s\n' "no-such-host.invalid x@y.invalid" > "$XDG_CONFIG_HOME/git-agent-g
 t "unmapped remote asks"           3 push-identity.sh 'git push origin main'
 t "non-push passes"                0 push-identity.sh 'git fetch origin'
 
+# --- branch-delete: history-rewriting merges --------------------------------
+# A rebase, squash or cherry-pick puts the branch's content on the base under a
+# new SHA, so ancestry is false even though nothing would be stranded. Each
+# scenario gets its own repo with its own bare origin.
+
+mkrw() { # <name> -> $rwrepo, a clone with origin/main and a feat branch off base
+    rwrepo="$sandbox/rw-$1"
+    git init -q --bare "$rwrepo.origin"
+    git init -q "$rwrepo"
+    git -C "$rwrepo" remote add origin "$rwrepo.origin"
+    printf 'base\n' > "$rwrepo/f.txt"
+    git -C "$rwrepo" add f.txt
+    git -C "$rwrepo" commit -qm base
+    git -C "$rwrepo" push -qu origin main
+    git -C "$rwrepo" checkout -qb feat
+}
+
+sync_origin() { git -C "$1" push -q origin main; git -C "$1" fetch -q origin; }
+
+rt() { # <name> <want-rc> <repo> ; delete of 'feat' in that repo
+    _n=$1; _w=$2; _r=$3
+    ( cd "$_r" && "$root/core/checks/branch-delete.sh" 'git branch -d feat' >/dev/null 2>&1 )
+    _g=$?
+    if [ "$_g" -eq "$_w" ]; then pass=$((pass+1)); else
+        fail=$((fail+1)); echo "FAIL: $_n (want $_w got $_g)"; fi
+}
+
+# rebase-merge: the contribution is replayed onto main, branch left behind
+mkrw rebase
+printf 'A\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
+git -C "$rwrepo" checkout -q main
+printf 'other\n' > "$rwrepo/g.txt"; git -C "$rwrepo" add g.txt; git -C "$rwrepo" commit -qm "main moves on"
+git -C "$rwrepo" checkout -q -b tmp feat
+git -C "$rwrepo" rebase main >/dev/null 2>&1
+git -C "$rwrepo" checkout -q main
+git -C "$rwrepo" merge -q --ff-only tmp >/dev/null 2>&1
+git -C "$rwrepo" branch -qD tmp
+sync_origin "$rwrepo"
+rt "rebase-merged branch allowed"      0 "$rwrepo"
+
+# squash-merge of a single commit
+mkrw squash1
+printf 'A\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
+git -C "$rwrepo" checkout -q main
+git -C "$rwrepo" merge -q --squash feat >/dev/null 2>&1
+git -C "$rwrepo" commit -qm "squashed feat"
+sync_origin "$rwrepo"
+rt "squash-merged (1 commit) allowed"  0 "$rwrepo"
+
+# squash-merge of several commits: no individual patch matches, only the
+# branch taken as a whole does
+mkrw squashN
+printf 'A\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
+printf 'B\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm b
+git -C "$rwrepo" checkout -q main
+git -C "$rwrepo" merge -q --squash feat >/dev/null 2>&1
+git -C "$rwrepo" commit -qm "squashed feat"
+sync_origin "$rwrepo"
+rt "squash-merged (N commits) allowed" 0 "$rwrepo"
+
+# the other direction: part of the branch was squashed in, part never left it
+mkrw partial
+printf 'A\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
+git -C "$rwrepo" checkout -q main
+git -C "$rwrepo" merge -q --squash feat >/dev/null 2>&1
+git -C "$rwrepo" commit -qm "squashed only the first commit"
+sync_origin "$rwrepo"
+git -C "$rwrepo" checkout -q feat
+printf 'NEVER-MERGED\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm b
+git -C "$rwrepo" checkout -q main
+rt "partially merged still refused"    1 "$rwrepo"
+
+# and a branch whose work never reached the base at all
+mkrw none
+printf 'NEVER\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
+git -C "$rwrepo" checkout -q main
+printf 'other\n' > "$rwrepo/g.txt"; git -C "$rwrepo" add g.txt; git -C "$rwrepo" commit -qm "main moves on"
+sync_origin "$rwrepo"
+rt "unmerged branch still refused"     1 "$rwrepo"
+
+# the squash probe must not leave anything behind in the repo it inspects
+before=$(find "$rwrepo/.git/objects" -type f | wc -l | tr -d ' ')
+( cd "$rwrepo" && "$root/core/checks/branch-delete.sh" 'git branch -d feat' >/dev/null 2>&1 )
+after=$(find "$rwrepo/.git/objects" -type f | wc -l | tr -d ' ')
+if [ "$before" -eq "$after" ]; then pass=$((pass+1)); else
+    fail=$((fail+1)); echo "FAIL: check wrote objects into the repo ($before -> $after)"; fi
+
 echo "----"
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]

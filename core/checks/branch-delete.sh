@@ -41,9 +41,52 @@ if [ -z "$base" ]; then
     exit 3
 fi
 
+# _no_new_patches <ref> -> rc 0 when every commit the ref adds is already in the
+# base as a patch. `git cherry` marks patch-equivalent commits "-" and genuinely
+# new ones "+", so an absence of "+" means nothing would be stranded.
+# A failed `git cherry` returns 1 rather than an empty result: an error must
+# read as "cannot show this is merged", never as permission to delete.
+_no_new_patches() {
+    _cherry=$(git -C "$dir" cherry "refs/remotes/$base" "$1" 2>/dev/null) || return 1
+    ! printf '%s\n' "$_cherry" | grep -q '^+'
+}
+
 if ! git -C "$dir" merge-base --is-ancestor "refs/heads/$branch" "refs/remotes/$base" 2>/dev/null; then
-    echo "Branch '$branch' has commits not reached $base — deleting would strand them. Allowed next: run \`git log $base..$branch\` to show the user what would be lost, and let them decide; deletion stays blocked until the branch is fully merged."
-    exit 1
+    # Ancestry is the cheap test and it is only correct for a plain merge. Every
+    # history-rewriting merge (rebase, squash, cherry-pick) lands the same content
+    # under new SHAs, leaving ancestry false forever and the branch permanently
+    # undeletable through this check. So compare patches before refusing.
+    merged_anyway=no
+
+    if _no_new_patches "refs/heads/$branch"; then
+        merged_anyway=yes
+    else
+        # A squash of several commits matches none of them individually, so
+        # rebuild the branch as the single commit a squash would have produced
+        # and ask about that instead. New objects are written to a scratch
+        # directory, never into the repository being inspected: these checks
+        # read, they do not write.
+        mb=$(git -C "$dir" merge-base "refs/remotes/$base" "refs/heads/$branch" 2>/dev/null)
+        tree=$(git -C "$dir" rev-parse "refs/heads/$branch^{tree}" 2>/dev/null)
+        objdir=$(git -C "$dir" rev-parse --git-path objects 2>/dev/null)
+        scratch=$(mktemp -d "${TMPDIR:-/tmp}/gag-squash.XXXXXX" 2>/dev/null)
+        if [ -n "$mb" ] && [ -n "$tree" ] && [ -n "$scratch" ]; then
+            synth=$(GIT_OBJECT_DIRECTORY="$scratch" \
+                    GIT_ALTERNATE_OBJECT_DIRECTORIES="$objdir" \
+                    git -C "$dir" commit-tree "$tree" -p "$mb" -m gag-squash-probe 2>/dev/null)
+            if [ -n "$synth" ] && GIT_OBJECT_DIRECTORY="$scratch" \
+                 GIT_ALTERNATE_OBJECT_DIRECTORIES="$objdir" \
+                 _no_new_patches "$synth"; then
+                merged_anyway=yes
+            fi
+        fi
+        [ -n "$scratch" ] && rm -rf "$scratch"
+    fi
+
+    if [ "$merged_anyway" = no ]; then
+        echo "Branch '$branch' has commits not reached $base, by SHA or by patch, so deleting would strand them. Allowed next: run \`git log $base..$branch\` to show the user what would be lost, and let them decide; deletion stays blocked until the branch is fully merged."
+        exit 1
+    fi
 fi
 
 if git -C "$dir" rev-parse --verify --quiet "$branch@{upstream}" >/dev/null 2>&1; then
