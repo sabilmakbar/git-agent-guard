@@ -55,6 +55,16 @@ blocked before anything actually is. It is also the escape hatch if a check misf
 on a command shape the parser gets wrong. Flip the mode in
 `~/.config/git-agent-guard/config`, one line, no reinstall.
 
+There is a third value you set by hand rather than at install, `MODE=off`, which
+skips every check without uninstalling anything. Use it to get out of the way for a
+while; use `--uninstall` when you mean it permanently.
+
+Only the exact lowercase spellings `advisory` and `off` turn blocking down. A typo,
+a trailing comment, or a missing config file all read as `managed`, because a guard
+you can disable by misspelling its own setting fails open without telling you.
+Turning the kit off also leaves the repository's own git hooks alone: whatever husky
+or pre-commit installed there keeps running.
+
 ## Install
 
 **Read this first: the installer edits `~/.claude/settings.json`.** That file is your

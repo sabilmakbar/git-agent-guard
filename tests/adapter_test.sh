@@ -60,6 +60,20 @@ mkdir -p "$XDG_CONFIG_HOME/git-agent-guard"
 echo MODE=advisory > "$XDG_CONFIG_HOME/git-agent-guard/config"
 t "advisory mode warns not denies" advisory 'git add -A && git commit -m "x"'
 
+echo MODE=off > "$XDG_CONFIG_HOME/git-agent-guard/config"
+t "off lets a violation through"   allow 'git add -A && git commit -m "x"'
+
+# Fail safe: only the exact spellings turn blocking down, so a typo in this
+# file cannot silently disable the guard.
+echo MODE=of > "$XDG_CONFIG_HOME/git-agent-guard/config"
+t "typo in MODE still denies"      deny  'git add -A && git commit -m "x"'
+echo MODE=OFF > "$XDG_CONFIG_HOME/git-agent-guard/config"
+t "wrong case still denies"        deny  'git add -A && git commit -m "x"'
+echo "MODE=advisory # note" > "$XDG_CONFIG_HOME/git-agent-guard/config"
+t "trailing text is not advisory"  deny  'git add -A && git commit -m "x"'
+rm -f "$XDG_CONFIG_HOME/git-agent-guard/config"
+t "missing config denies"          deny  'git add -A && git commit -m "x"'
+
 echo "----"
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]

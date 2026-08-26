@@ -43,8 +43,13 @@ run_child() { # <script> [args...]
 cleanup() { [ -n "$stdin_file" ] && rm -f "$stdin_file"; }
 trap cleanup EXIT
 
+# "off" silences this kit's own checks, and only those: the chain to the
+# repository's own hook below still runs, so disabling this guard never
+# disables husky, pre-commit, or whatever else the repo installed.
 fail=0
-if [ -d "$dispatch_dir/$hook_name.d" ]; then
+if [ "$mode" = off ]; then
+    :
+elif [ -d "$dispatch_dir/$hook_name.d" ]; then
     for script in "$dispatch_dir/$hook_name.d"/*; do
         [ -x "$script" ] || continue
         GAG_HOOK="$hook_name" run_child "$script" "$@"

@@ -15,6 +15,10 @@ root="$adapter_dir/../.."
 checks_dir="$root/core/checks"
 . "$root/core/lib.sh"
 
+# Checked before anything is parsed, so "off" costs one config read rather than
+# a full pass that ends in silence.
+[ "$(gag_mode)" = off ] && exit 0
+
 cmd=$(jq -r '.tool_input.command // empty' 2>/dev/null) || exit 0
 [ -n "$cmd" ] || exit 0
 

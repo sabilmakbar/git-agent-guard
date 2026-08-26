@@ -78,6 +78,17 @@ name="advisory violation exits 0";  check [ "$rc" -eq 0 ]
 name="repo hook runs in advisory";  check [ -f "$GAG_TEST_OUT/repohook-ran" ]
 rm -f "$XDG_CONFIG_HOME/git-agent-guard/config"
 
+# 3b. off: this kit's checks are skipped, but the repo's own hook still runs.
+# Turning this guard off must never turn off husky, pre-commit, or anything
+# else the repository installed for itself.
+echo MODE=off > "$XDG_CONFIG_HOME/git-agent-guard/config"
+rm -rf "$GAG_TEST_OUT"; mkdir -p "$GAG_TEST_OUT"
+GAG_TEST_CHECK_RC=1 run_hook pre-push 2>/dev/null; rc=$?
+name="off exits 0";                 check [ "$rc" -eq 0 ]
+name="off skips kit checks";        check [ ! -f "$GAG_TEST_OUT/check-stdin" ]
+name="off still chains repo hook";  check [ -f "$GAG_TEST_OUT/repohook-ran" ]
+rm -f "$XDG_CONFIG_HOME/git-agent-guard/config"
+
 # 4. check bug (rc=2) never blocks
 rm -rf "$GAG_TEST_OUT"; mkdir -p "$GAG_TEST_OUT"
 GAG_TEST_CHECK_RC=2 run_hook pre-push 2>/dev/null; rc=$?

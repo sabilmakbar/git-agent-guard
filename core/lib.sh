@@ -51,13 +51,17 @@ gag_gh_words() {
       | grep -qE "(^|[;&|])[[:space:]]*gh[[:space:]]+$2[[:space:]]+$3([[:space:]]|$)"
 }
 
-# gag_mode -> prints managed|advisory (default managed when config missing: fail safe).
+# gag_mode -> prints managed|advisory|off.
+# Only the two exact spellings turn blocking down; anything else, including a
+# typo and a missing config, reads as managed. A guard that could be disabled
+# by misspelling its own setting would fail open silently.
 gag_mode() {
     _cfg="${XDG_CONFIG_HOME:-$HOME/.config}/git-agent-guard/config"
     _m=""
     [ -f "$_cfg" ] && _m=$(sed -n 's/^MODE=//p' "$_cfg" | head -1)
     case "$_m" in
         advisory) printf 'advisory' ;;
+        off)      printf 'off'      ;;
         *)        printf 'managed'  ;;
     esac
 }
