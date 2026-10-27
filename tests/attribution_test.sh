@@ -79,6 +79,24 @@ repo2="$sandbox/repo2"; seed "$repo2" g.txt
 ( cd "$repo2" && "$check" 'git commit -m "x"' >/dev/null 2>&1 )
 [ $? -eq 3 ]; ok "second repo still asked" $?
 
+# include leaves no temp files behind
+[ -z "$(find "$repo/.claude" -name 'settings.local.json.*')" ]; ok "include leaves no temp files" $?
+
+# include refuses to write through a symlink, at either level, and records nothing
+outside="$sandbox/outside"; mkdir -p "$outside"
+printf '{}\n' > "$outside/target.json"
+repo3="$sandbox/repo3"; seed "$repo3" h.txt
+ln -s "$outside" "$repo3/.claude"
+( cd "$repo3" && "$helper" include >/dev/null 2>&1 ); rc=$?
+[ "$rc" -ne 0 ]; ok "symlinked .claude refused" $?
+[ -z "$(ls "$outside" | grep -v '^target.json$')" ]; ok "nothing written through symlinked .claude" $?
+rm "$repo3/.claude"; mkdir "$repo3/.claude"
+ln -s "$outside/target.json" "$repo3/.claude/settings.local.json"
+( cd "$repo3" && "$helper" include >/dev/null 2>&1 ); rc=$?
+[ "$rc" -ne 0 ]; ok "symlinked settings.local.json refused" $?
+[ "$(cat "$outside/target.json")" = '{}' ]; ok "symlink target left untouched" $?
+! grep -q "$repo3" "$XDG_CONFIG_HOME/git-agent-guard/attribution-decisions"; ok "refused include records no decision" $?
+
 # the helper refuses outside a repository
 ( cd "$sandbox" && "$helper" include >/dev/null 2>&1 )
 [ $? -eq 2 ]; ok "helper refuses outside a repo" $?

@@ -35,6 +35,20 @@ root=$(git rev-parse --show-toplevel)
 key=$(git remote get-url origin 2>/dev/null) || key=""
 [ -n "$key" ] || key="$root"
 
+settings="$root/.claude/settings.local.json"
+
+# A repository can ship .claude, or the settings file inside it, as a symlink
+# pointing anywhere the user can write. Following it would let a cloned repo
+# aim this write at a file outside itself, so refuse before recording anything.
+if [ "$choice" = include ]; then
+    for p in "$root/.claude" "$settings"; do
+        if [ -L "$p" ]; then
+            echo "refusing: $p is a symlink; writing through it could modify a file outside this repository. Nothing recorded." >&2
+            exit 1
+        fi
+    done
+fi
+
 mkdir -p "$cfg"
 touch "$decisions"
 # Replace any previous decision for this key rather than accumulating.
@@ -46,16 +60,19 @@ echo "recorded: $key -> $choice"
 
 [ "$choice" = include ] || { echo "No repo-local settings written (global setting applies)."; exit 0; }
 
-# include: override the global setting for this repository only.
-settings="$root/.claude/settings.local.json"
-mkdir -p "$root/.claude"
+# include: override the global setting for this repository only. The new
+# content goes to a fresh mktemp file (never a predictable name a symlink could
+# sit at) and is renamed into place.
+mkdir -p "$root/.claude" || exit 1
+tmp=$(mktemp "$root/.claude/settings.local.json.XXXXXX") || { echo "cannot create a temp file in $root/.claude" >&2; exit 1; }
 if [ -f "$settings" ]; then
-    command -v jq >/dev/null 2>&1 || { echo "jq needed to merge into existing $settings" >&2; exit 1; }
-    jq --arg t "$TRAILER" --arg p "$PR_FOOTER" '.attribution.commit = $t | .attribution.pr = $p' "$settings" > "$settings.tmp" \
-      && mv "$settings.tmp" "$settings"
+    command -v jq >/dev/null 2>&1 || { rm -f "$tmp"; echo "jq needed to merge into existing $settings" >&2; exit 1; }
+    jq --arg t "$TRAILER" --arg p "$PR_FOOTER" '.attribution.commit = $t | .attribution.pr = $p' "$settings" > "$tmp" \
+      || { rm -f "$tmp"; echo "could not merge into $settings (is it valid JSON?)" >&2; exit 1; }
 else
-    printf '{\n  "attribution": {\n    "commit": "%s",\n    "pr": "%s"\n  }\n}\n' "$TRAILER" "$PR_FOOTER" > "$settings"
+    printf '{\n  "attribution": {\n    "commit": "%s",\n    "pr": "%s"\n  }\n}\n' "$TRAILER" "$PR_FOOTER" > "$tmp"
 fi
+mv "$tmp" "$settings" || { rm -f "$tmp"; exit 1; }
 echo "wrote $settings"
 
 # The local settings file is meant to stay out of history. Say so rather than
