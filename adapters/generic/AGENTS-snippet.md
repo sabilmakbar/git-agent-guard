@@ -21,10 +21,9 @@ support should use a real adapter instead (see `adapters/`).
 - Before pushing, confirm `git config user.email` is the right identity for
   that remote (work vs personal). A wrong identity in public history is
   hard to scrub.
-- Never add an agent-attribution footer to PR bodies.
-- Whether commits carry a `Co-Authored-By` trailer is the project's decision, not
-  yours: ask once per repository and follow the answer. Do not add one by default,
-  and do not remove one where the project has chosen to have it.
+- Attribution is configured, not chosen by you: follow whatever commit trailer
+  and PR footer the environment or project sets up. Never remove or alter an
+  attribution trailer or footer that is configured or already present.
 
 ## Judgment rules
 
