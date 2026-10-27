@@ -49,6 +49,15 @@ t "after exclude, silent"          0 'git commit -m "x"'
 t "after include, silent"          0 'git commit -m "x"'
 grep -q 'Co-Authored-By' "$repo/.claude/settings.local.json" 2>/dev/null
 ok "include wrote the trailer setting" $?
+[ "$(jq -r .attribution.pr "$repo/.claude/settings.local.json" 2>/dev/null)" = 'Generated with [Claude Code](https://claude.com/claude-code)' ]
+ok "include wrote the PR footer setting" $?
+
+# include merges into an existing local settings file, keeping other keys
+printf '{"permissions": {"allow": ["Bash(ls)"]}}\n' > "$repo/.claude/settings.local.json"
+( cd "$repo" && "$helper" include >/dev/null 2>&1 )
+jq -e '.permissions.allow[0] == "Bash(ls)" and (.attribution.commit | test("Co-Authored-By")) and (.attribution.pr | test("Claude Code"))' \
+  "$repo/.claude/settings.local.json" >/dev/null 2>&1
+ok "include merges, keeping other keys" $?
 
 # a decision is replaced, never accumulated
 n=$(grep -c . "$XDG_CONFIG_HOME/git-agent-guard/attribution-decisions")

@@ -98,7 +98,7 @@ answer: the choice can belong to the project, so the first commit in a repo with
 recorded decision pauses and asks, once, and never again for that repo.
 
 ```bash
-bin/gag-attribution include    # commits here carry a Co-Authored-By trailer
+bin/gag-attribution include    # commits carry a Co-Authored-By trailer, PRs a footer
 bin/gag-attribution exclude    # they do not
 bin/gag-attribution default    # defer to the global setting, stop asking
 ```
@@ -114,6 +114,10 @@ rather than letting Claude Code use its own default. Its default names the model
 ("Claude Sonnet 5", "Claude Haiku 4.5"), so a repo left to it accumulates a
 different co-author identity per model and per model release, and the history stops
 being greppable by one name.
+
+It sets the PR-body footer as well, to
+`Generated with [Claude Code](https://claude.com/claude-code)`, so pull requests from
+that repo disclose the same way its commits do.
 
 `include` writes `.claude/settings.local.json` in that repo, which overrides the
 global setting for that repo only. That file is the per-machine, untracked one, so

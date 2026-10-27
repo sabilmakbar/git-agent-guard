@@ -1,7 +1,7 @@
 #!/bin/sh
 # Record this repository's AI-attribution decision, once.
 #
-#   gag-attribution include   # commits carry a Co-Authored-By trailer
+#   gag-attribution include   # commits carry a Co-Authored-By trailer, PRs a footer
 #   gag-attribution exclude   # commits carry no trailer
 #   gag-attribution default   # defer to whatever the global setting says
 #
@@ -17,6 +17,7 @@ set -u
 # 4.5", observed), so a repo accumulates a different co-author identity per
 # model and per model release. One stable identity keeps the history greppable.
 TRAILER='Co-Authored-By: Claude <noreply@anthropic.com>'
+PR_FOOTER='Generated with [Claude Code](https://claude.com/claude-code)'
 cfg="${XDG_CONFIG_HOME:-$HOME/.config}/git-agent-guard"
 decisions="$cfg/attribution-decisions"
 
@@ -45,15 +46,15 @@ echo "recorded: $key -> $choice"
 
 [ "$choice" = include ] || { echo "No repo-local settings written (global setting applies)."; exit 0; }
 
-# include: override the global suppression for this repository only.
+# include: override the global setting for this repository only.
 settings="$root/.claude/settings.local.json"
 mkdir -p "$root/.claude"
 if [ -f "$settings" ]; then
     command -v jq >/dev/null 2>&1 || { echo "jq needed to merge into existing $settings" >&2; exit 1; }
-    jq --arg t "$TRAILER" '.attribution.commit = $t' "$settings" > "$settings.tmp" \
+    jq --arg t "$TRAILER" --arg p "$PR_FOOTER" '.attribution.commit = $t | .attribution.pr = $p' "$settings" > "$settings.tmp" \
       && mv "$settings.tmp" "$settings"
 else
-    printf '{\n  "attribution": {\n    "commit": "%s"\n  }\n}\n' "$TRAILER" > "$settings"
+    printf '{\n  "attribution": {\n    "commit": "%s",\n    "pr": "%s"\n  }\n}\n' "$TRAILER" "$PR_FOOTER" > "$settings"
 fi
 echo "wrote $settings"
 
