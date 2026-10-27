@@ -170,6 +170,44 @@ after=$(find "$rwrepo/.git/objects" -type f | wc -l | tr -d ' ')
 if [ "$before" -eq "$after" ]; then pass=$((pass+1)); else
     fail=$((fail+1)); echo "FAIL: check wrote objects into the repo ($before -> $after)"; fi
 
+# The squash probe hands its scratch object store to git. POSIX leaves it
+# unspecified whether assignments in front of a function call reach the
+# commands inside it, and whether they outlive it: ksh drops them for git
+# (the squash goes unrecognised) and keeps them afterwards (a GIT_OBJECT_
+# DIRECTORY left pointing at the deleted scratch dir would fail every later
+# query, and the stash and unpushed checks would pass by error). So run the
+# check under each shell at hand, in both directions.
+mkrw squashsh
+printf 'A\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
+printf 'B\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm b
+git -C "$rwrepo" checkout -q main
+git -C "$rwrepo" merge -q --squash feat >/dev/null 2>&1
+git -C "$rwrepo" commit -qm "squashed feat"
+sync_origin "$rwrepo"
+for _sh in /bin/sh bash dash ksh; do
+    command -v "$_sh" >/dev/null 2>&1 || continue
+    ( cd "$rwrepo" && "$_sh" "$root/core/checks/branch-delete.sh" 'git branch -d feat' >/dev/null 2>&1 )
+    _g=$?
+    if [ "$_g" -eq 0 ]; then pass=$((pass+1)); else
+        fail=$((fail+1)); echo "FAIL: squash-merged (N commits) allowed under $_sh (want 0 got $_g)"; fi
+done
+
+mkrw squashstash
+printf 'A\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
+printf 'B\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm b
+printf 'wip\n' > "$rwrepo/w.txt"; git -C "$rwrepo" stash -qu
+git -C "$rwrepo" checkout -q main
+git -C "$rwrepo" merge -q --squash feat >/dev/null 2>&1
+git -C "$rwrepo" commit -qm "squashed feat"
+sync_origin "$rwrepo"
+for _sh in /bin/sh bash dash ksh; do
+    command -v "$_sh" >/dev/null 2>&1 || continue
+    ( cd "$rwrepo" && "$_sh" "$root/core/checks/branch-delete.sh" 'git branch -d feat' >/dev/null 2>&1 )
+    _g=$?
+    if [ "$_g" -eq 1 ]; then pass=$((pass+1)); else
+        fail=$((fail+1)); echo "FAIL: squash-merged + WIP stash refused under $_sh (want 1 got $_g)"; fi
+done
+
 echo "----"
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]

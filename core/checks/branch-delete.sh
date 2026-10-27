@@ -62,13 +62,25 @@ fi
 dir=$(gag_workdir "$cmd")
 git -C "$dir" rev-parse --git-dir >/dev/null 2>&1 || exit 0
 
-# _no_new_patches <ref> -> rc 0 when every commit the ref adds is already in the
-# base as a patch. `git cherry` marks patch-equivalent commits "-" and genuinely
-# new ones "+", so an absence of "+" means nothing would be stranded.
+# _no_new_patches <ref> [scratch] -> rc 0 when every commit the ref adds is
+# already in the base as a patch. `git cherry` marks patch-equivalent commits
+# "-" and genuinely new ones "+", so an absence of "+" means nothing would be
+# stranded. With a scratch object dir, git reads it first and the repository's
+# own objects ($objdir) as an alternate.
 # A failed `git cherry` returns 1 rather than an empty result: an error must
 # read as "cannot show this is merged", never as permission to delete.
+# The object-dir variables go to git through env, never as assignments in
+# front of this function: POSIX leaves it unspecified whether those reach the
+# commands inside it and whether they outlive the call. ksh drops them for git
+# and keeps them afterwards, and a GIT_OBJECT_DIRECTORY left pointing at the
+# deleted scratch dir would make every later git query here fail.
 _no_new_patches() {
-    _cherry=$(git -C "$dir" cherry "refs/remotes/$base" "$1" 2>/dev/null) || return 1
+    if [ -n "${2:-}" ]; then
+        _cherry=$(env GIT_OBJECT_DIRECTORY="$2" GIT_ALTERNATE_OBJECT_DIRECTORIES="$objdir" \
+                  git -C "$dir" cherry "refs/remotes/$base" "$1" 2>/dev/null) || return 1
+    else
+        _cherry=$(git -C "$dir" cherry "refs/remotes/$base" "$1" 2>/dev/null) || return 1
+    fi
     ! printf '%s\n' "$_cherry" | grep -q '^+'
 }
 
@@ -108,12 +120,9 @@ check_branch() {
             objdir=$(git -C "$dir" rev-parse --git-path objects 2>/dev/null)
             scratch=$(mktemp -d "${TMPDIR:-/tmp}/gag-squash.XXXXXX" 2>/dev/null)
             if [ -n "$mb" ] && [ -n "$tree" ] && [ -n "$scratch" ]; then
-                synth=$(GIT_OBJECT_DIRECTORY="$scratch" \
-                        GIT_ALTERNATE_OBJECT_DIRECTORIES="$objdir" \
+                synth=$(env GIT_OBJECT_DIRECTORY="$scratch" GIT_ALTERNATE_OBJECT_DIRECTORIES="$objdir" \
                         git -C "$dir" commit-tree "$tree" -p "$mb" -m gag-squash-probe 2>/dev/null)
-                if [ -n "$synth" ] && GIT_OBJECT_DIRECTORY="$scratch" \
-                     GIT_ALTERNATE_OBJECT_DIRECTORIES="$objdir" \
-                     _no_new_patches "$synth"; then
+                if [ -n "$synth" ] && _no_new_patches "$synth" "$scratch"; then
                     merged_anyway=yes
                 fi
             fi
