@@ -121,7 +121,9 @@ gag_workdir() {
 #   hidden <where>    git/gh runs somewhere the verb matchers cannot see it:
 #                     sh -c strings, eval, $( ), backticks, xargs, exec, nohup,
 #                     time, nice, find -exec, ( ) and { } groupings, a heredoc,
-#                     here-string or pipe fed to a shell
+#                     here-string or pipe fed to a shell. A read-only query
+#                     (see readonly below) in $( ), backticks or a grouping
+#                     is not reported.
 #   elevgit <how>     git/gh runs under sudo, doas, su, pkexec or run0
 #   elevated <how>    any command runs under one of those launchers
 # A small shell lexer: single quotes and quoted-delimiter heredoc bodies are
@@ -172,6 +174,60 @@ gag_scan_launch() {
         R_K = k
     }
 
+    # readonly C M CE: is `C W[M..CE]` (C = git or gh) a query that cannot
+    # write? Used only for $( ), backticks and groupings, where reading a value
+    # (v=$(git rev-parse HEAD), (cd d && git status)) is the everyday shape.
+    # An allowlist, and anything it does not recognise reads as a write.
+    function readonly(c, m, ce,   v, a, j, list, want, n) {
+        if (c == "gh") {
+            v = W[m] " " W[m + 1]
+            if (v ~ /^pr (view|list|status|diff|checks)$/ || v ~ /^issue (view|list|status)$/ || v == "repo view") return 1
+            if (W[m] != "api") return 0
+            for (j = m + 1; j <= ce; j++) {
+                a = W[j]
+                if (a ~ /^(-f|-F|--field|--raw-field|--input)/) return 0
+                if (a == "-X" || a == "--method") { if (toupper(W[j + 1]) != "GET") return 0; j++; continue }
+                if (a ~ /^(-X|--method=)/) { sub(/^(-X|--method=)/, "", a); if (toupper(a) != "GET") return 0 }
+            }
+            return 1
+        }
+        while (m <= ce && W[m] ~ /^-/) { if (W[m] ~ /^(-C|-c|--git-dir|--work-tree|--namespace|--config-env)$/) m++; m++ }
+        if (m > ce) return 0
+        v = W[m]; n = ce - m
+        for (j = m + 1; j <= ce; j++) if (W[j] ~ /^(--output(=|$)|-O|--open-files-in-pager)/) return 0
+        if (v ~ /^(status|log|diff|show|rev-parse|rev-list|describe|ls-files|ls-tree|cat-file|merge-base|show-ref|blame|grep|shortlog|for-each-ref)$/) return 1
+        if (v == "symbolic-ref") {    # a second positional would set the ref
+            n = 0; for (j = m + 1; j <= ce; j++) if (W[j] !~ /^-/) n++
+            return n <= 1
+        }
+        if (v == "stash" || v == "worktree") return W[m + 1] == "list"
+        if (v == "remote") return (n == 1 && W[m + 1] ~ /^(-v|--verbose)$/) || W[m + 1] == "get-url"
+        if (v == "config") {
+            want = 0
+            for (j = m + 1; j <= ce; j++) {
+                if (W[j] ~ /^(--get|--get-all|--get-regexp|--list|-l)$/) want = 1
+                else if (W[j] ~ /^-/ && W[j] !~ /^(--global|--system|--local|--worktree|--show-origin|--show-scope|--null|-z|--name-only|--includes|--no-includes|--type=.*|--bool|--int|--path|--default=.*)$/) return 0
+            }
+            return want
+        }
+        if (v == "branch" || v == "tag") {
+            # Listing only: a bare name would create, and -d/-m/-f... would
+            # delete, rename or force, so any other flag or name reads as a write.
+            list = 0; want = 0
+            for (j = m + 1; j <= ce; j++) if (W[j] == "-l" || W[j] == "--list") list = 1
+            for (j = m + 1; j <= ce; j++) {
+                a = W[j]
+                if (a ~ /^(--contains|--merged|--no-merged|--points-at)$/) { want = 1; if (j < ce && W[j + 1] !~ /^-/) j++; continue }
+                if (a ~ /^(--contains|--merged|--no-merged|--points-at)=/ || a == "-l" || a == "--list") { want = 1; continue }
+                if (v == "branch" && a ~ /^(--show-current|-a|--all|-r|--remotes|-v|-vv|--verbose)$/) { want = 1; continue }
+                if (a ~ /^(--format|--sort|--colou?r)(=|$)/ || a == "--no-color") continue
+                if (a ~ /^-/ || !list) return 0
+            }
+            return want
+        }
+        return 0
+    }
+
     # finish CS HIDDEN ISPIPE: judge the simple command in W[CS..WN].
     function finish(cs, hidden, ispipe,   ce, k, c, m, sawc, str, has) {
         ce = WN
@@ -181,7 +237,7 @@ gag_scan_launch() {
             if (c == "git" || c == "gh") {
                 if (R_ELEV != "") emit("elevgit", R_ELEV)
                 else if (R_WRAP != "") emit("hidden", R_WRAP)
-                else if (hidden != "") emit("hidden", hidden)
+                else if (hidden != "" && !(hidden ~ /^(command substitution|backticks|a \( \) grouping|a \{ \} grouping)$/ && readonly(c, k + 1, ce))) emit("hidden", hidden)
             } else if (isshell(c) || c == "su") {
                 if (c == "su") emit("elevated", "su")
                 sawc = 0; has = 0

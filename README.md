@@ -30,7 +30,7 @@ history. The two kinds compose, and running both is sensible.
 | A first-time-tracked file needs its own yes | the commit pauses and asks, listing the files |
 | No deleting a branch with work still on it | refused unless merged, pushed, and no stash names it |
 | The right identity for the right remote | a push with the wrong `user.email` is refused (opt-in, see below) |
-| git runs where the guard can see it | git or gh inside `sh -c`, `eval`, `$( )`, backticks, `xargs`, a grouping, or under `sudo` is refused |
+| git runs where the guard can see it | git or gh inside `sh -c`, `eval`, `$( )`, backticks, `xargs`, a grouping, or under `sudo` is refused (read-only queries in `$( )` and groupings excepted) |
 | Elevated privileges are the user's call, for any command | `sudo`, `doas`, `su`, `pkexec` or `run0` pauses and asks, wherever it runs |
 | Each repo decides whether commits disclose AI assistance | the first commit in an undecided repo pauses and asks, once (opt-in) |
 
@@ -39,6 +39,15 @@ Claude Code is the wired adapter today. The checks themselves are tool-agnostic
 scripts with a three-exit-code contract, so adapters for other agent CLIs are small,
 and `adapters/generic/` has the rules as plain guidance for tools that cannot run
 hooks at all.
+
+Hidden git has one exception. Reading a value is the everyday use of `$( )`,
+backticks and `( )` or `{ }` groupings, as in `v=$(git rev-parse HEAD)` or
+`(cd ~/x && git status)`, so a read-only query is allowed there: an allowlist of
+verbs (`status`, `log`, `diff`, `rev-parse`, listing forms of `branch`, `tag` and
+`config`, `gh pr view`, a GET `gh api`, and similar), with anything unrecognized or
+able to write, such as `diff --output`, still refused. Opaque launchers get no
+exception: `sh -c`, `eval`, `xargs`, `exec`, `nohup`, `find -exec`, a script fed to a
+shell, and anything under `sudo` stay refused whatever the verb.
 
 The elevation check is the one rule that is not about git: it applies to every
 command the agent runs. A launcher counts wherever it actually executes: after `;`,

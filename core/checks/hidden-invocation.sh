@@ -5,7 +5,10 @@
 # inside sh -c, eval, $( ), backticks, xargs, exec, a grouping, or a script fed
 # to a shell runs just the same but is invisible to those matchers, so one
 # wrapper would bypass the whole kit. Deny rather than ask: the remedy is to
-# run the same command directly.
+# run the same command directly. One exception: a read-only query (an
+# allowlist in gag_scan_launch) inside $( ), backticks or a ( ) / { } grouping
+# passes, since `v=$(git rev-parse HEAD)` cannot change anything the other
+# checks guard. Opaque launchers (sh -c, eval, xargs, exec, ...) get none.
 #
 # Under sudo/doas/su/pkexec/run0 git must not run at all: files it writes turn
 # root-owned and repo hooks and config run as root. elevation.sh asks about
@@ -28,7 +31,7 @@ fi
 
 where=$(printf '%s\n' "$found" | sed -n 's/^hidden //p' | head -1)
 if [ -n "$where" ]; then
-    echo "This call runs git/gh inside $where, where the guard cannot inspect it. Allowed next: run the git or gh command directly as its own top-level call so it can be checked; if you need its output, run it first and use the result in a second call."
+    echo "This call runs git/gh inside $where, where the guard cannot inspect it (only read-only queries are allowed in \$( ) and groupings). Allowed next: run the git or gh command directly as its own top-level call so it can be checked; if you need its output, run it first and use the result in a second call."
     exit 1
 fi
 
