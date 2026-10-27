@@ -34,7 +34,12 @@ gag_strip_quoted() {
             next
         }
         { print }
-    ' | sed "s/'[^']*'//g; s/\"[^\"]*\"//g"
+    ' | awk -v q="'" '
+        # Quoted spans are removed across line breaks, not line by line: a
+        # multi-line commit message is one span, and its second line is data.
+        { s = s (NR > 1 ? "\n" : "") $0 }
+        END { gsub(q "[^" q "]*" q, "", s); gsub(/"[^"]*"/, "", s); print s }
+    '
 }
 
 # GAG_CMD_POS: ERE for "a command starts here, and what may precede its name".

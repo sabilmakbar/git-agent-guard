@@ -57,6 +57,9 @@ hello
 EOF
 git add -A && git commit -m "x"'
 t "empty command allowed"            0 staging-separation.sh ''
+t "verbs on a message's 2nd line ok" 0 staging-separation.sh 'git commit -m "subject
+
+git add x && git commit -m y"'
 t "commit -a denied"                 1 staging-separation.sh 'git commit -a -m "x"'
 t "commit --all denied"              1 staging-separation.sh 'git commit --all -m "x"'
 t "commit -am denied"                1 staging-separation.sh 'git commit -am "x"'
