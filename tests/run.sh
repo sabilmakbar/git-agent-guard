@@ -145,6 +145,56 @@ t "VAR=val gh pr merge denied"       1 pr-merge.sh 'GH_REPO=o/r gh pr merge 42'
 t "absolute gh path merge denied"    1 pr-merge.sh '/opt/homebrew/bin/gh pr merge 42'
 t "command gh pr merge denied"       1 pr-merge.sh 'command gh pr merge 42'
 
+# --- hidden-invocation (raw command: quotes intact) -------------------------
+t "sh -c git denied"                 1 hidden-invocation.sh "sh -c 'git add -A && git commit -m x'"
+t "bash -lc git denied"              1 hidden-invocation.sh 'bash -lc "git status"'
+t "eval git denied"                  1 hidden-invocation.sh 'eval "git add ."'
+t "\$( ) git denied"                 1 hidden-invocation.sh 'echo $(git rev-parse HEAD)'
+t "\$( ) in assignment denied"       1 hidden-invocation.sh 'v=$(git rev-parse HEAD)'
+t "\$( ) in dq message denied"       1 hidden-invocation.sh 'git commit -m "at $(git rev-parse HEAD)"'
+t "backticks git denied"             1 hidden-invocation.sh 'echo `git log -1`'
+t "process substitution denied"      1 hidden-invocation.sh 'diff <(git show HEAD:f) f'
+t "xargs git denied"                 1 hidden-invocation.sh 'ls | xargs git add'
+t "xargs -I git denied"              1 hidden-invocation.sh 'xargs -I{} git add {}'
+t "exec git denied"                  1 hidden-invocation.sh 'exec git status'
+t "nohup git denied"                 1 hidden-invocation.sh 'nohup git fetch &'
+t "time git denied"                  1 hidden-invocation.sh 'time git status'
+t "( ) grouping denied"              1 hidden-invocation.sh '(cd /tmp && git status)'
+t "{ } grouping denied"              1 hidden-invocation.sh '{ git status; }'
+t "find -exec git denied"            1 hidden-invocation.sh 'find . -exec git add {} \;'
+t "pipe into a shell denied"         1 hidden-invocation.sh "echo 'git add -A' | sh"
+t "heredoc into a shell denied"      1 hidden-invocation.sh "bash <<'EOF'
+git add -A
+EOF"
+t "here-string into a shell denied"  1 hidden-invocation.sh "bash <<< 'git status'"
+t "\$( ) in unquoted heredoc denied" 1 hidden-invocation.sh 'cat > f.txt <<EOF
+at $(git rev-parse HEAD)
+EOF'
+t "sudo git denied"                  1 hidden-invocation.sh 'sudo git pull'
+t "sudo -u git denied"               1 hidden-invocation.sh 'sudo -u root git status'
+t "doas/pkexec/run0 git denied"      1 hidden-invocation.sh 'doas git push; pkexec git log; run0 git log'
+t "su -c git denied"                 1 hidden-invocation.sh "su -c 'git log' root"
+t "sudo sh -c git denied"            1 hidden-invocation.sh "sudo sh -c 'git pull'"
+t "plain git allowed"                0 hidden-invocation.sh 'git status && git log -1 | head'
+t "env/command git allowed"          0 hidden-invocation.sh 'env GIT_DIR=.git git status; command git log'
+t "single-quoted \$( ) allowed"      0 hidden-invocation.sh "git commit -m 'use \$(git rev-parse HEAD)'"
+t "escaped \$( ) in dq allowed"      0 hidden-invocation.sh 'git commit -m "use \$(git rev-parse HEAD)"'
+t "single-quoted backticks allowed"  0 hidden-invocation.sh "git commit -m 'run \`git add\` first'"
+t "quoted heredoc literal allowed"   0 hidden-invocation.sh "cat > f.sh <<'EOF'
+git add -A
+\$(git status) and \`git log\`
+EOF"
+t "unquoted heredoc plain git ok"    0 hidden-invocation.sh 'cat > f.sh <<EOF
+git add -A && git commit -m x
+EOF'
+t "commit message via heredoc ok"    0 hidden-invocation.sh "git commit -m \"\$(cat <<'EOF'
+subject (git words, sudo, and \$(git x)
+EOF
+)\""
+t "\$( ) without git allowed"        0 hidden-invocation.sh 'git -C "$(pwd)" status'
+t "sudo without git allowed"         0 hidden-invocation.sh 'sudo apt install git'
+t "git-like words allowed"           0 hidden-invocation.sh 'cat .gitignore; ls ./ghost; echo github'
+
 echo "----"
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]

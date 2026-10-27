@@ -30,6 +30,7 @@ history. The two kinds compose, and running both is sensible.
 | A first-time-tracked file needs its own yes | the commit pauses and asks, listing the files |
 | No deleting a branch with work still on it | refused unless merged, pushed, and no stash names it |
 | The right identity for the right remote | a push with the wrong `user.email` is refused (opt-in, see below) |
+| git runs where the guard can see it | git or gh inside `sh -c`, `eval`, `$( )`, backticks, `xargs`, a grouping, or under `sudo` is refused |
 | Each repo decides whether commits disclose AI assistance | the first commit in an undecided repo pauses and asks, once (opt-in) |
 
 Every check runs before the command does, from one hook on the agent's shell tool.

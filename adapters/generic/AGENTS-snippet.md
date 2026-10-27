@@ -11,6 +11,8 @@ support should use a real adapter instead (see `adapters/`).
 - Run `git add` and `git commit` as two separate commands, never chained,
   and never `git commit -a` or `git commit <paths>`. Staging is reviewed on
   its own before anything is committed.
+- Run git and gh directly, as top-level commands: never inside `sh -c`,
+  `eval`, `$( )`, backticks, `xargs` or a subshell, and never under `sudo`.
 - Never merge pull requests (`gh pr merge`, merge API endpoints, or UI).
   Opening PRs is your job; merging is always the human's.
 - Before a commit that tracks a file for the first time, list the new files
