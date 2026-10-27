@@ -7,9 +7,13 @@
 # history, and some contribution policies reject AI-attributed commits
 # outright. It is also effectively permanent, since removing a trailer later
 # means rewriting history. So it is asked once per repository and remembered.
+#
+# Opt-in: silent unless the config sets ATTRIBUTION_CHECK=on.
 
 set -u
 . "$(dirname "$0")/../lib.sh"
+
+[ "$(gag_attribution_check)" = on ] || exit 0
 
 cmd="${1:-}"
 [ -n "$cmd" ] || exit 0

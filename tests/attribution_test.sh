@@ -38,6 +38,17 @@ ok() { # <name> <cond-rc>
         fail=$((fail+1)); echo "FAIL: $1"; fi
 }
 
+cfgf="$XDG_CONFIG_HOME/git-agent-guard/config"
+mkdir -p "$XDG_CONFIG_HOME/git-agent-guard"
+
+# Opt-in: no config, or anything but the exact `on`, keeps the check silent.
+t "no config: check off"           0 'git commit -m "x"'
+echo ATTRIBUTION_CHECK=On > "$cfgf"
+t "wrong case: check off"          0 'git commit -m "x"'
+echo "ATTRIBUTION_CHECK=on # x" > "$cfgf"
+t "trailing text: check off"       0 'git commit -m "x"'
+printf 'MODE=managed\nATTRIBUTION_CHECK=on\n' > "$cfgf"
+
 t "undecided repo asks on commit"  3 'git commit -m "x"'
 t "non-commit command passes"      0 'git status'
 
@@ -49,6 +60,15 @@ t "after exclude, silent"          0 'git commit -m "x"'
 t "after include, silent"          0 'git commit -m "x"'
 grep -q 'Co-Authored-By' "$repo/.claude/settings.local.json" 2>/dev/null
 ok "include wrote the trailer setting" $?
+[ "$(jq -r .attribution.pr "$repo/.claude/settings.local.json" 2>/dev/null)" = 'Generated with [Claude Code](https://claude.com/claude-code)' ]
+ok "include wrote the PR footer setting" $?
+
+# include merges into an existing local settings file, keeping other keys
+printf '{"permissions": {"allow": ["Bash(ls)"]}}\n' > "$repo/.claude/settings.local.json"
+( cd "$repo" && "$helper" include >/dev/null 2>&1 )
+jq -e '.permissions.allow[0] == "Bash(ls)" and (.attribution.commit | test("Co-Authored-By")) and (.attribution.pr | test("Claude Code"))' \
+  "$repo/.claude/settings.local.json" >/dev/null 2>&1
+ok "include merges, keeping other keys" $?
 
 # a decision is replaced, never accumulated
 n=$(grep -c . "$XDG_CONFIG_HOME/git-agent-guard/attribution-decisions")
@@ -58,6 +78,24 @@ n=$(grep -c . "$XDG_CONFIG_HOME/git-agent-guard/attribution-decisions")
 repo2="$sandbox/repo2"; seed "$repo2" g.txt
 ( cd "$repo2" && "$check" 'git commit -m "x"' >/dev/null 2>&1 )
 [ $? -eq 3 ]; ok "second repo still asked" $?
+
+# include leaves no temp files behind
+[ -z "$(find "$repo/.claude" -name 'settings.local.json.*')" ]; ok "include leaves no temp files" $?
+
+# include refuses to write through a symlink, at either level, and records nothing
+outside="$sandbox/outside"; mkdir -p "$outside"
+printf '{}\n' > "$outside/target.json"
+repo3="$sandbox/repo3"; seed "$repo3" h.txt
+ln -s "$outside" "$repo3/.claude"
+( cd "$repo3" && "$helper" include >/dev/null 2>&1 ); rc=$?
+[ "$rc" -ne 0 ]; ok "symlinked .claude refused" $?
+[ -z "$(ls "$outside" | grep -v '^target.json$')" ]; ok "nothing written through symlinked .claude" $?
+rm "$repo3/.claude"; mkdir "$repo3/.claude"
+ln -s "$outside/target.json" "$repo3/.claude/settings.local.json"
+( cd "$repo3" && "$helper" include >/dev/null 2>&1 ); rc=$?
+[ "$rc" -ne 0 ]; ok "symlinked settings.local.json refused" $?
+[ "$(cat "$outside/target.json")" = '{}' ]; ok "symlink target left untouched" $?
+! grep -q "$repo3" "$XDG_CONFIG_HOME/git-agent-guard/attribution-decisions"; ok "refused include records no decision" $?
 
 # the helper refuses outside a repository
 ( cd "$sandbox" && "$helper" include >/dev/null 2>&1 )

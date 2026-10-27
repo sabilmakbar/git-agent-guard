@@ -8,8 +8,11 @@ support should use a real adapter instead (see `adapters/`).
 
 ## Git workflow rules
 
-- Run `git add` and `git commit` as two separate commands, never chained.
-  Staging is reviewed on its own before anything is committed.
+- Run `git add` and `git commit` as two separate commands, never chained,
+  and never `git commit -a` or `git commit <paths>`. Staging is reviewed on
+  its own before anything is committed.
+- Run git and gh directly, as top-level commands: never inside `sh -c`,
+  `eval`, `$( )`, backticks, `xargs` or a subshell, and never under `sudo`.
 - Never merge pull requests (`gh pr merge`, merge API endpoints, or UI).
   Opening PRs is your job; merging is always the human's.
 - Before a commit that tracks a file for the first time, list the new files
@@ -21,10 +24,9 @@ support should use a real adapter instead (see `adapters/`).
 - Before pushing, confirm `git config user.email` is the right identity for
   that remote (work vs personal). A wrong identity in public history is
   hard to scrub.
-- Never add an agent-attribution footer to PR bodies.
-- Whether commits carry a `Co-Authored-By` trailer is the project's decision, not
-  yours: ask once per repository and follow the answer. Do not add one by default,
-  and do not remove one where the project has chosen to have it.
+- Attribution is configured, not chosen by you: follow whatever commit trailer
+  and PR footer the environment or project sets up. Never remove or alter an
+  attribution trailer or footer that is configured or already present.
 
 ## Judgment rules
 

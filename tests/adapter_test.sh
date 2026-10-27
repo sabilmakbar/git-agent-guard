@@ -47,18 +47,30 @@ t "gh pr merge denied"          deny  'gh pr merge 7'
 t "plain add allowed"           allow 'git add -A'
 t "non-git command allowed"     allow 'ls -la'
 t "gh pr view allowed"          allow 'gh pr view 7 --json state'
+t "path-qualified git reaches checks" deny '/usr/bin/git add -A && /usr/bin/git commit -m "x"'
+t "git in \$( ) reaches checks"    deny 'echo $(git push)'
+t "read-only \$( ) allowed"        allow 'v=$(git rev-parse HEAD)'
+t "git in sh -c reaches checks"    deny "sh -c 'git status'"
+t "sudo on any command asks"       ask   'sudo make install'
+t "sudo git: deny outranks ask"    deny  'sudo git pull'
+t "sudo sh -c git: deny wins"      deny  "sudo sh -c 'git status'"
+t "word sudo as data allowed"      allow "grep -r 'sudo' docs/"
 
 # deny must outrank a co-firing ask: undecided repo (ask) + chained call (deny)
 git init -q "$sandbox/undecided"
 ( cd "$sandbox/undecided" && printf 'a\n' > f.txt && git add f.txt && git commit -qm init ) >/dev/null 2>&1
 cd "$sandbox/undecided" || exit 1
+echo ATTRIBUTION_CHECK=on > "$XDG_CONFIG_HOME/git-agent-guard/config"
 t "deny outranks ask"           deny  'git add -A && git commit -m "x"'
 t "lone ask still asks"         ask   'git commit -m "x"'
+rm -f "$XDG_CONFIG_HOME/git-agent-guard/config"
+t "attribution ask is opt-in"   allow 'git commit -m "x"'
 cd "$sandbox/repo" || exit 1
 
 mkdir -p "$XDG_CONFIG_HOME/git-agent-guard"
 echo MODE=advisory > "$XDG_CONFIG_HOME/git-agent-guard/config"
 t "advisory mode warns not denies" advisory 'git add -A && git commit -m "x"'
+t "advisory mode hints on sudo"   advisory 'sudo make install'
 
 echo MODE=off > "$XDG_CONFIG_HOME/git-agent-guard/config"
 t "off lets a violation through"   allow 'git add -A && git commit -m "x"'
