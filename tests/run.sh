@@ -195,6 +195,42 @@ t "\$( ) without git allowed"        0 hidden-invocation.sh 'git -C "$(pwd)" sta
 t "sudo without git allowed"         0 hidden-invocation.sh 'sudo apt install git'
 t "git-like words allowed"           0 hidden-invocation.sh 'cat .gitignore; ls ./ghost; echo github'
 
+# --- elevation (ask, any command) -------------------------------------------
+t "sudo asks"                        3 elevation.sh 'sudo rm -rf /tmp/x'
+t "doas/pkexec/run0 ask"             3 elevation.sh 'doas ls; pkexec ls; run0 ls'
+t "su asks"                          3 elevation.sh 'su - root'
+t "su -c asks"                       3 elevation.sh "su -c 'ls' root"
+t "sudo after && asks"               3 elevation.sh 'ls && sudo make install'
+t "sudo after | asks"                3 elevation.sh 'ls | sudo tee /etc/x'
+t "sudo after || and ; asks"         3 elevation.sh 'false || sudo ls; true'
+t "sudo in sh -c asks"               3 elevation.sh "bash -c 'sudo ls'"
+t "sudo in eval asks"                3 elevation.sh 'eval "sudo ls"'
+t "sudo in \$( ) asks"               3 elevation.sh 'echo $(sudo whoami)'
+t "sudo in dq \$( ) asks"            3 elevation.sh 'echo "$(sudo whoami)"'
+t "sudo in backticks asks"           3 elevation.sh 'echo `sudo whoami`'
+t "sudo behind xargs asks"           3 elevation.sh 'ls | xargs sudo rm'
+t "sudo behind env/command asks"     3 elevation.sh 'env A=1 sudo ls'
+t "sudo behind exec/nohup/time asks" 3 elevation.sh 'time sudo ls'
+t "sudo in ( ) asks"                 3 elevation.sh '(sudo ls)'
+t "sudo in { } asks"                 3 elevation.sh '{ sudo ls; }'
+t "sudo in heredoc to shell asks"    3 elevation.sh "sh <<'EOF'
+sudo ls
+EOF"
+t "path-qualified sudo asks"         3 elevation.sh '/usr/bin/sudo ls'
+t "grep sudo allowed"                0 elevation.sh 'grep -r sudo docs/'
+t "single-quoted sudo allowed"       0 elevation.sh "echo 'use sudo'"
+t "sudo in commit message allowed"   0 elevation.sh "git commit -m 'mention sudo'"
+t "sudo in dq text allowed"          0 elevation.sh 'git commit -m "mention sudo"'
+t "single-quoted \$(sudo) allowed"   0 elevation.sh "echo '\$(sudo whoami)'"
+t "sudo in sh -c text allowed"       0 elevation.sh "bash -c 'echo sudo'"
+t "literal heredoc sudo allowed"     0 elevation.sh "cat > f.sh <<'EOF'
+sudo apt install x
+EOF"
+t "unquoted heredoc sudo allowed"    0 elevation.sh 'cat > f.sh <<EOF
+sudo apt install x
+EOF'
+t "sudo as a filename allowed"       0 elevation.sh 'echo hi > /tmp/sudo; ls sudoers.d'
+
 echo "----"
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]

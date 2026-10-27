@@ -31,6 +31,7 @@ history. The two kinds compose, and running both is sensible.
 | No deleting a branch with work still on it | refused unless merged, pushed, and no stash names it |
 | The right identity for the right remote | a push with the wrong `user.email` is refused (opt-in, see below) |
 | git runs where the guard can see it | git or gh inside `sh -c`, `eval`, `$( )`, backticks, `xargs`, a grouping, or under `sudo` is refused |
+| Elevated privileges are the user's call, for any command | `sudo`, `doas`, `su`, `pkexec` or `run0` pauses and asks, wherever it runs |
 | Each repo decides whether commits disclose AI assistance | the first commit in an undecided repo pauses and asks, once (opt-in) |
 
 Every check runs before the command does, from one hook on the agent's shell tool.
@@ -39,9 +40,18 @@ scripts with a three-exit-code contract, so adapters for other agent CLIs are sm
 and `adapters/generic/` has the rules as plain guidance for tools that cannot run
 hooks at all.
 
+The elevation check is the one rule that is not about git: it applies to every
+command the agent runs. A launcher counts wherever it actually executes: after `;`,
+`&&` or a pipe, behind `env`, `xargs` or `time`, inside `sh -c`, `eval`, `$( )`,
+backticks or a grouping. Elevation is asked about rather than refused, since
+installing a package or editing a system file can be legitimate; git itself under
+`sudo` is refused outright, and that refusal wins over the question.
+
 A command that merely mentions a forbidden shape passes: quoted spans and heredoc
 bodies are stripped before matching, so a commit message, a grep pattern, or a script
 you are writing whose contents contain `git add ... && git commit` trips nothing.
+The exception is text the shell would execute anyway: `$( )` and backticks inside
+double quotes or an unquoted heredoc still run, so they are checked.
 
 ## Two modes, and you must pick one
 
@@ -158,11 +168,12 @@ stage-and-commit becomes two separate calls a few seconds later, without you tou
 anything.
 
 The asking checks are different, and pausing you is their job. A commit that tracks a
-new file for the first time, the first commit in a repo whose attribution decision has
-not been made (when that check is on), and a push to a remote your identities file
-does not cover all stop and wait for your answer, because those decisions are yours
-and not the agent's. When two checks fire at once, a refusal is what you see: a hard
-violation outranks a pending decision.
+new file for the first time, any command run with `sudo` or another elevation
+launcher, the first commit in a repo whose attribution decision has not been made
+(when that check is on), and a push to a remote your identities file does not cover
+all stop and wait for your answer, because those decisions are yours and not the
+agent's. When two checks fire at once, a refusal is what you see: a hard violation
+outranks a pending decision.
 
 ## Is it working?
 

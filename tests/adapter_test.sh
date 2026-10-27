@@ -50,6 +50,10 @@ t "gh pr view allowed"          allow 'gh pr view 7 --json state'
 t "path-qualified git reaches checks" deny '/usr/bin/git add -A && /usr/bin/git commit -m "x"'
 t "git in \$( ) reaches checks"    deny 'echo $(git rev-parse HEAD)'
 t "git in sh -c reaches checks"    deny "sh -c 'git status'"
+t "sudo on any command asks"       ask   'sudo make install'
+t "sudo git: deny outranks ask"    deny  'sudo git pull'
+t "sudo sh -c git: deny wins"      deny  "sudo sh -c 'git status'"
+t "word sudo as data allowed"      allow "grep -r 'sudo' docs/"
 
 # deny must outrank a co-firing ask: undecided repo (ask) + chained call (deny)
 git init -q "$sandbox/undecided"
@@ -65,6 +69,7 @@ cd "$sandbox/repo" || exit 1
 mkdir -p "$XDG_CONFIG_HOME/git-agent-guard"
 echo MODE=advisory > "$XDG_CONFIG_HOME/git-agent-guard/config"
 t "advisory mode warns not denies" advisory 'git add -A && git commit -m "x"'
+t "advisory mode hints on sudo"   advisory 'sudo make install'
 
 echo MODE=off > "$XDG_CONFIG_HOME/git-agent-guard/config"
 t "off lets a violation through"   allow 'git add -A && git commit -m "x"'

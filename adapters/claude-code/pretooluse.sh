@@ -22,10 +22,11 @@ checks_dir="$root/core/checks"
 cmd=$(jq -r '.tool_input.command // empty' 2>/dev/null) || exit 0
 [ -n "$cmd" ] || exit 0
 
-# Fast exit: no git or gh anywhere in the command, as a whole word. Anything
-# can precede the word ($(git, 'git, /usr/bin/git), since the checks
-# themselves decide whether it is really invoked.
-printf '%s' "$cmd" | grep -qE '(^|[^A-Za-z0-9_.-])(git|gh)([^A-Za-z0-9_.-]|$)' || exit 0
+# Fast exit: no git, gh, or elevation launcher anywhere in the command, as a
+# whole word. Anything can precede the word ($(git, 'git, /usr/bin/git,
+# (sudo), since the checks themselves decide whether it is really invoked;
+# the git checks stay silent on a sudo-only command and vice versa.
+printf '%s' "$cmd" | grep -qE '(^|[^A-Za-z0-9_.-])(git|gh|sudo|doas|su|pkexec|run0)([^A-Za-z0-9_.-]|$)' || exit 0
 
 # Every check runs, and a deny outranks an ask. Otherwise a pending decision
 # (ask) reported by an early check would shadow a hard violation found by a
