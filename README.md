@@ -25,13 +25,14 @@ history. The two kinds compose, and running both is sensible.
 
 | Rule | What happens |
 |---|---|
-| Stage and commit are two separate approvals | a chained `add` and `commit` is refused, with the fix in the message |
+| Stage and commit are two separate approvals | a chained `add` and `commit`, `commit -a`, or a commit that names paths is refused, with the fix in the message |
 | Agents open PRs, humans merge them | `gh pr merge` and API merge calls are refused |
 | A first-time-tracked file needs its own yes | the commit pauses and asks, listing the files |
 | No deleting a branch with work still on it | refused unless merged, pushed, and no stash names it |
 | The right identity for the right remote | a push with the wrong `user.email` is refused (opt-in, see below) |
-| Each repo decides whether commits disclose AI assistance | the first commit in an undecided repo pauses and asks, once |
-| No agent-attribution footer in PR bodies | covered by a native setting, written at install |
+| git runs where the guard can see it | git or gh inside `sh -c`, `eval`, `$( )`, backticks, `xargs`, a grouping, or under `sudo` is refused (read-only queries in `$( )` and groupings excepted) |
+| Elevated privileges are the user's call, for any command | `sudo`, `doas`, `su`, `pkexec` or `run0` pauses and asks, wherever it runs |
+| Each repo decides whether commits disclose AI assistance | the first commit in an undecided repo pauses and asks, once (opt-in) |
 
 Every check runs before the command does, from one hook on the agent's shell tool.
 Claude Code is the wired adapter today. The checks themselves are tool-agnostic
@@ -39,9 +40,27 @@ scripts with a three-exit-code contract, so adapters for other agent CLIs are sm
 and `adapters/generic/` has the rules as plain guidance for tools that cannot run
 hooks at all.
 
+Hidden git has one exception. Reading a value is the everyday use of `$( )`,
+backticks and `( )` or `{ }` groupings, as in `v=$(git rev-parse HEAD)` or
+`(cd ~/x && git status)`, so a read-only query is allowed there: an allowlist of
+verbs (`status`, `log`, `diff`, `rev-parse`, listing forms of `branch`, `tag` and
+`config`, `gh pr view`, a GET `gh api`, and similar), with anything unrecognized or
+able to write, such as `diff --output`, still refused. Opaque launchers get no
+exception: `sh -c`, `eval`, `xargs`, `exec`, `nohup`, `find -exec`, a script fed to a
+shell, and anything under `sudo` stay refused whatever the verb.
+
+The elevation check is the one rule that is not about git: it applies to every
+command the agent runs. A launcher counts wherever it actually executes: after `;`,
+`&&` or a pipe, behind `env`, `xargs` or `time`, inside `sh -c`, `eval`, `$( )`,
+backticks or a grouping. Elevation is asked about rather than refused, since
+installing a package or editing a system file can be legitimate; git itself under
+`sudo` is refused outright, and that refusal wins over the question.
+
 A command that merely mentions a forbidden shape passes: quoted spans and heredoc
 bodies are stripped before matching, so a commit message, a grep pattern, or a script
 you are writing whose contents contain `git add ... && git commit` trips nothing.
+The exception is text the shell would execute anyway: `$( )` and backticks inside
+double quotes or an unquoted heredoc still run, so they are checked.
 
 ## Two modes, and you must pick one
 
@@ -88,19 +107,27 @@ git clone https://github.com/sabilmakbar/git-agent-guard.git ~/git-agent-guard
 The kit runs from the clone, so keep the folder where you cloned it. Hooks apply from
 your next Claude Code session, not the current one.
 
-The install also sets Claude Code's `attribution` keys empty, which is the native way
-to keep agent footers out of commit messages and PR bodies. If you already have
-`attribution` set to something, the installer reports it and leaves yours alone.
+The install does not touch Claude Code's `attribution` keys. Whether commits and PR
+bodies carry an agent footer is your policy, or your organization's, and some
+organizations require one; the kit has no business suppressing it.
 
 ### Whether commits say they were AI-assisted is decided per repo
 
-That empty `attribution.commit` is a starting position, not the answer: it means no
-commit silently gains a `Co-Authored-By` trailer before anyone chose. The choice
-itself belongs to the project, so the first commit in a repo with no recorded
-decision pauses and asks, once, and never again for that repo.
+Your global `attribution` setting is the starting position, not necessarily the
+answer: the choice can belong to the project. With the check turned on, the first
+commit in a repo with no recorded decision pauses and asks, once, and never again for
+that repo. It is off by default, since many setups already have the answer decided
+for them; turn it on with one line in `~/.config/git-agent-guard/config`:
+
+```
+ATTRIBUTION_CHECK=on
+```
+
+Only the exact lowercase `on` enables it. Anything else, including a missing line,
+reads as off. The helper below works either way.
 
 ```bash
-bin/gag-attribution include    # commits here carry a Co-Authored-By trailer
+bin/gag-attribution include    # commits carry a Co-Authored-By trailer, PRs a footer
 bin/gag-attribution exclude    # they do not
 bin/gag-attribution default    # defer to the global setting, stop asking
 ```
@@ -116,6 +143,10 @@ rather than letting Claude Code use its own default. Its default names the model
 ("Claude Sonnet 5", "Claude Haiku 4.5"), so a repo left to it accumulates a
 different co-author identity per model and per model release, and the history stops
 being greppable by one name.
+
+It sets the PR-body footer as well, to
+`Generated with [Claude Code](https://claude.com/claude-code)`, so pull requests from
+that repo disclose the same way its commits do.
 
 `include` writes `.claude/settings.local.json` in that repo, which overrides the
 global setting for that repo only. That file is the per-machine, untracked one, so
@@ -146,11 +177,12 @@ stage-and-commit becomes two separate calls a few seconds later, without you tou
 anything.
 
 The asking checks are different, and pausing you is their job. A commit that tracks a
-new file for the first time, the first commit in a repo whose attribution decision has
-not been made, and a push to a remote your identities file does not cover all stop and
-wait for your answer, because those decisions are yours and not the agent's. When two
-checks fire at once, a refusal is what you see: a hard violation outranks a pending
-decision.
+new file for the first time, any command run with `sudo` or another elevation
+launcher, the first commit in a repo whose attribution decision has not been made
+(when that check is on), and a push to a remote your identities file does not cover
+all stop and wait for your answer, because those decisions are yours and not the
+agent's. When two checks fire at once, a refusal is what you see: a hard violation
+outranks a pending decision.
 
 ## Is it working?
 
@@ -218,11 +250,11 @@ these reports.
 ~/git-agent-guard/install.sh --uninstall
 ```
 
-Takes the kit's hook entry back out of `~/.claude/settings.json`, removes the
-`attribution` keys only if the kit was the one that set them, and deletes the kit's
-config and manifest. Hooks it did not write are not touched. A backup of your
-settings from just before the removal is left next to the file. Your identities file
-stays, since you wrote it.
+Takes the kit's hook entry back out of `~/.claude/settings.json` and deletes the
+kit's config and manifest. Older versions of the installer set the `attribution`
+keys; if yours did, uninstall says so and leaves them for you to keep or remove.
+Hooks it did not write are not touched. A backup of your settings from just before
+the removal is left next to the file. Your identities file stays, since you wrote it.
 
 ## Working on the kit
 

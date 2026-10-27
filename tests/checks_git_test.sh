@@ -55,6 +55,22 @@ t "stash on branch denied"         1 branch-delete.sh 'git branch -d merged-bran
 ( cd "$repo" && git stash drop -q ) >/dev/null 2>&1
 t "non-delete branch cmd passes"   0 branch-delete.sh 'git branch --list'
 t "plain push passes"              0 branch-delete.sh 'git push origin main'
+# remote deletes: the remote name must never be read as the branch
+t "push --delete after remote"     1 branch-delete.sh 'git push origin --delete unmerged-branch'
+t "push --delete before remote"    1 branch-delete.sh 'git push --delete origin unmerged-branch'
+t "push -d before remote"          1 branch-delete.sh 'git push -d origin unmerged-branch'
+t "push -d after remote"           1 branch-delete.sh 'git push origin -d unmerged-branch'
+t "push clustered -fd"             1 branch-delete.sh 'git push -fd origin unmerged-branch'
+t "push :branch"                   1 branch-delete.sh 'git push origin :unmerged-branch'
+t "push :refs/heads/branch"        1 branch-delete.sh 'git push origin :refs/heads/unmerged-branch'
+t "push -d second of two branches" 1 branch-delete.sh 'git push origin -d merged-branch unmerged-branch'
+t "push -d with globals, -o value" 1 branch-delete.sh 'git -c a=b push -o ci.skip origin -d unmerged-branch'
+t "push -d merged branch passes"   0 branch-delete.sh 'git push -d origin merged-branch'
+t "push :merged branch passes"     0 branch-delete.sh 'git push origin :merged-branch'
+t "push -u not a delete"           0 branch-delete.sh 'git push -u origin unmerged-branch'
+t "push --dry-run not a delete"    0 branch-delete.sh 'git push --dry-run origin unmerged-branch'
+t "push src:dst not a delete"      0 branch-delete.sh 'git push origin unmerged-branch:other'
+t "delete only in later cmd"       0 branch-delete.sh 'git push origin unmerged-branch; echo -d'
 
 # --- push-identity ----------------------------------------------------------
 t "no identities file: disabled"   0 push-identity.sh 'git push origin main'

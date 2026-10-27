@@ -1,7 +1,8 @@
 #!/bin/sh
 # git-agent-guard installer. Agent-layer (v1): wires the Claude Code adapter
-# as a PreToolUse hook and sets attribution keys. Runs from the clone —
-# nothing is copied; update with git pull.
+# as a PreToolUse hook. Runs from the clone — nothing is copied; update with
+# git pull. Attribution settings are left alone: footers are the user's and
+# their organization's policy, not this kit's.
 #
 #   ./install.sh --mode managed|advisory [--dry-run]
 #   ./install.sh --uninstall [--dry-run]
@@ -53,13 +54,11 @@ if [ "$uninstall" -eq 1 ]; then
           | if (.hooks.PreToolUse? // null) == [] then .hooks |= del(.PreToolUse) else . end
           | if (.hooks? // null) == {} then del(.hooks) else . end' "$settings" > "$settings.tmp" && mv "$settings.tmp" "$settings"
     fi
+    # Older installs set the attribution keys and recorded it here. They are
+    # left in place now: what they should be is a policy this kit no longer
+    # decides, and silently changing footers on uninstall would be worse.
     if grep -q '^attribution_set=1$' "$manifest" 2>/dev/null; then
-        act "Removing attribution keys (this kit set them)"
-        if [ "$dry" -eq 0 ] && [ -f "$settings" ]; then
-            jq 'del(.attribution)' "$settings" > "$settings.tmp" && mv "$settings.tmp" "$settings"
-        fi
-    else
-        say "attribution keys were not set by this kit; leaving them."
+        say "NOTE: an earlier install set the attribution keys in $settings; leaving them. Remove them by hand if you do not want them."
     fi
     act "Removing $cfg_dir/config and manifest"
     [ "$dry" -eq 0 ] && rm -f "$cfg_dir/config" "$manifest"
@@ -108,23 +107,13 @@ else
     fi
 fi
 
-attr_set=0
-has_attr=$(jq 'has("attribution")' "$settings" 2>/dev/null || echo false)
-if [ "$has_attr" = "true" ]; then
-    say "attribution already present in settings; leaving as-is: $(jq -c .attribution "$settings")"
-else
-    act "Setting attribution keys empty (suppresses agent footers in commits and PRs)"
-    if [ "$dry" -eq 0 ]; then
-        jq '.attribution = {commit: "", pr: ""}' "$settings" > "$settings.tmp" && mv "$settings.tmp" "$settings"
-    fi
-    attr_set=1
-fi
-
 act "Writing mode to $cfg_dir/config"
 if [ "$dry" -eq 0 ]; then
     mkdir -p "$cfg_dir"
-    printf 'MODE=%s\n' "$mode" > "$cfg_dir/config"
-    { printf 'hook_command=%s\n' "$adapter"; printf 'attribution_set=%s\n' "$attr_set"; } > "$manifest"
+    # Replace only the MODE line; other keys (ATTRIBUTION_CHECK) are the user's.
+    { grep -v '^MODE=' "$cfg_dir/config" 2>/dev/null; printf 'MODE=%s\n' "$mode"; } > "$cfg_dir/config.tmp" \
+      && mv "$cfg_dir/config.tmp" "$cfg_dir/config"
+    printf 'hook_command=%s\n' "$adapter" > "$manifest"
 fi
 
 # Legacy overlap report — never remove what this kit did not write.
