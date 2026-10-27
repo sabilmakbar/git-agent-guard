@@ -1,6 +1,8 @@
 name: tests
 on:
-  push: {branches: [main]}
+  push:
+    branches: [main]
+    tags: ['v*']
   pull_request:
 jobs:
   test:
@@ -10,6 +12,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-tags: true
       - name: shellcheck
         if: runner.os == 'Linux'
         run: |
