@@ -22,8 +22,9 @@ checks_dir="$root/core/checks"
 cmd=$(jq -r '.tool_input.command // empty' 2>/dev/null) || exit 0
 [ -n "$cmd" ] || exit 0
 
-# Fast exit: nothing git/gh-shaped in the command.
-printf '%s' "$cmd" | grep -qE '(^|[;&|[:space:]])(git|gh)([[:space:]]|$)' || exit 0
+# Fast exit: nothing git/gh-shaped in the command. A path-qualified name
+# (/usr/bin/git) counts too.
+printf '%s' "$cmd" | grep -qE '(^|[;&|[:space:]/])(git|gh)([[:space:]]|$)' || exit 0
 
 # Every check runs, and a deny outranks an ask. Otherwise a pending decision
 # (ask) reported by an early check would shadow a hard violation found by a

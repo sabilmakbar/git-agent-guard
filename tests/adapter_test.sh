@@ -47,6 +47,7 @@ t "gh pr merge denied"          deny  'gh pr merge 7'
 t "plain add allowed"           allow 'git add -A'
 t "non-git command allowed"     allow 'ls -la'
 t "gh pr view allowed"          allow 'gh pr view 7 --json state'
+t "path-qualified git reaches checks" deny '/usr/bin/git add -A && /usr/bin/git commit -m "x"'
 
 # deny must outrank a co-firing ask: undecided repo (ask) + chained call (deny)
 git init -q "$sandbox/undecided"

@@ -58,6 +58,26 @@ EOF
 git add -A && git commit -m "x"'
 t "empty command allowed"            0 staging-separation.sh ''
 
+# --- verb matching through global options and launch prefixes --------------
+t "-c key=val chain denied"          1 staging-separation.sh 'git -c core.x=1 add -A && git commit -m "x"'
+t "-ckey=val chain denied"           1 staging-separation.sh 'git -ccore.x=1 add -A && git -ccore.x=1 commit -m "x"'
+t "-c quoted value chain denied"     1 staging-separation.sh 'git -c "user.name=a b" add -A && git commit -m "x"'
+t "--namespace= chain denied"        1 staging-separation.sh 'git --namespace=ns add -A && git commit -m "x"'
+t "-P / --paginate chain denied"     1 staging-separation.sh 'git -P add -A && git --paginate commit -m "x"'
+t "--no-replace-objects denied"      1 staging-separation.sh 'git --no-replace-objects add -A && git --literal-pathspecs commit -m "x"'
+t "stacked global options denied"    1 staging-separation.sh 'git --no-pager -C /tmp/r -c a=b --git-dir=/tmp/r/.git add -A && git commit -m "x"'
+t "absolute git path denied"         1 staging-separation.sh '/usr/bin/git add -A && /usr/bin/git commit -m "x"'
+t "relative git path denied"         1 staging-separation.sh './bin/git add -A && git commit -m "x"'
+t "command git denied"               1 staging-separation.sh 'command git add -A && command git commit -m "x"'
+t "env git denied"                   1 staging-separation.sh 'env git add -A && env -i git commit -m "x"'
+t "VAR=val git denied"               1 staging-separation.sh 'GIT_AUTHOR_NAME=x git add -A && A=1 B=2 git commit -m "x"'
+t "env VAR=val git denied"           1 staging-separation.sh 'env GIT_DIR=.git git add -A && git commit -m "x"'
+t "-c alone with commit allowed"     0 staging-separation.sh 'git -c core.x=1 commit -m "x"'
+t "/usr/bin/git add alone allowed"   0 staging-separation.sh '/usr/bin/git add -A'
+t "git-like names not matched"       0 staging-separation.sh 'mygit add -A && legit commit -m "x"'
+t "echoed verbs not matched"         0 staging-separation.sh 'echo env git add; echo command git commit'
+t "path to non-git not matched"      0 staging-separation.sh '/usr/bin/gitx add -A && git commit -m "x"'
+
 # --- pr-merge ---------------------------------------------------------------
 t "gh pr merge denied"               1 pr-merge.sh 'gh pr merge 42 --squash'
 t "chained gh pr merge denied"       1 pr-merge.sh 'git push && gh pr merge 42'
@@ -66,6 +86,9 @@ t "gh pr view allowed"               0 pr-merge.sh 'gh pr view 42 --json state'
 t "gh pr create allowed"             0 pr-merge.sh 'gh pr create --title t --body b'
 t "merge only in message allowed"    0 pr-merge.sh 'git commit -m "gh pr merge is forbidden"'
 t "git merge allowed (local)"        0 pr-merge.sh 'git merge feature-branch'
+t "VAR=val gh pr merge denied"       1 pr-merge.sh 'GH_REPO=o/r gh pr merge 42'
+t "absolute gh path merge denied"    1 pr-merge.sh '/opt/homebrew/bin/gh pr merge 42'
+t "command gh pr merge denied"       1 pr-merge.sh 'command gh pr merge 42'
 
 echo "----"
 echo "pass=$pass fail=$fail"

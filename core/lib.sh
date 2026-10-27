@@ -37,18 +37,29 @@ gag_strip_quoted() {
     ' | sed "s/'[^']*'//g; s/\"[^\"]*\"//g"
 }
 
+# GAG_CMD_POS: ERE for "a command starts here, and what may precede its name".
+# Command position is line start or after ; & | (covers && and ||). Before the
+# name: `command`, `env` (and flags such as -i), and VAR=value assignments, in
+# any number; the name itself may carry a path (/usr/bin/git, ./bin/git). Each
+# of these runs the same binary, so a matcher that skipped them would be a
+# one-word bypass.
+GAG_CMD_POS='(^|[;&|])[[:space:]]*((command|env)[[:space:]]+|-[^[:space:]]*[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*([^[:space:];&|]*/)?'
+
 # gag_git_verb STRIPPED VERB -> rc 0 when `git VERB` is actually invoked.
-# Command position only: line start or after ; & | (covers && and ||).
-# Tolerates a leading `git -C <path>` and other single-token global flags.
+# Any global options may sit between git and the verb: every dash token
+# (--no-pager, -P, -c<k=v>, --git-dir=<p>, --namespace=<n>, ...), plus the
+# separate argument of the options that take one (-C <p>, -c <k=v>, ...). The
+# argument is optional in the pattern because a quoted one has already been
+# stripped away, and `git -c "k=v" commit` must still read as a commit.
 gag_git_verb() {
     printf '%s' "$1" \
-      | grep -qE "(^|[;&|])[[:space:]]*git([[:space:]]+(-C|--git-dir|--work-tree)[[:space:]]*=?[[:space:]]*[^[:space:]]+|[[:space:]]+--no-pager)*[[:space:]]+$2([[:space:]]|$)"
+      | grep -qE "${GAG_CMD_POS}git([[:space:]]+(-C|-c|--git-dir|--work-tree|--namespace|--config-env)([[:space:]]+[^-[:space:]][^[:space:]]*)?|[[:space:]]+-[^[:space:]]*)*[[:space:]]+$2([[:space:]]|$)"
 }
 
 # gag_gh_words STRIPPED W1 W2 -> rc 0 when `gh W1 W2` is actually invoked.
 gag_gh_words() {
     printf '%s' "$1" \
-      | grep -qE "(^|[;&|])[[:space:]]*gh[[:space:]]+$2[[:space:]]+$3([[:space:]]|$)"
+      | grep -qE "${GAG_CMD_POS}gh[[:space:]]+$2[[:space:]]+$3([[:space:]]|$)"
 }
 
 # gag_mode -> prints managed|advisory|off.
