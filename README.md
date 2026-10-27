@@ -100,12 +100,24 @@ shows the plan without doing any of it.
 You need `jq`.
 
 ```bash
-git clone https://github.com/sabilmakbar/git-agent-guard.git ~/git-agent-guard
+git clone --branch v0.1.0 https://github.com/sabilmakbar/git-agent-guard.git ~/git-agent-guard
 ~/git-agent-guard/install.sh --mode managed     # or --mode advisory
 ```
 
 The kit runs from the clone, so keep the folder where you cloned it. Hooks apply from
 your next Claude Code session, not the current one.
+
+The checkout is pinned to a release tag. To upgrade when a newer release is available,
+fetch tags and check out that release, replacing `vX.Y.Z` with its tag:
+
+```bash
+git -C ~/git-agent-guard fetch --tags
+git -C ~/git-agent-guard checkout vX.Y.Z
+~/git-agent-guard/install.sh --mode managed  # or advisory, as chosen at install
+```
+
+`git pull` does not update a tag-pinned checkout. The [changelog](CHANGELOG.md)
+records what each release contains.
 
 The install does not touch Claude Code's `attribution` keys. Whether commits and PR
 bodies carry an agent footer is your policy, or your organization's, and some
