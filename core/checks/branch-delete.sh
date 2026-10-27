@@ -60,6 +60,12 @@ fi
 [ -n "$branches" ] || exit 0
 
 dir=$(gag_workdir "$cmd")
+
+# The squash probe's scratch object dir is removed however the check ends,
+# including when the hook is interrupted mid-probe.
+scratch=""
+trap '[ -z "$scratch" ] || rm -rf "$scratch"' EXIT
+trap 'exit 1' HUP INT TERM
 git -C "$dir" rev-parse --git-dir >/dev/null 2>&1 || exit 0
 
 # _no_new_patches <ref> [scratch] -> rc 0 when every commit the ref adds is
@@ -138,7 +144,8 @@ check_branch() {
                     merged_anyway=yes
                 fi
             fi
-            [ -n "$scratch" ] && rm -rf "$scratch"
+            [ -z "$scratch" ] || rm -rf "$scratch"
+            scratch=""
         fi
 
         if [ "$merged_anyway" = no ]; then

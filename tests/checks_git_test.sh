@@ -213,6 +213,35 @@ rt "stale origin/HEAD falls back"      0 "$rwrepo"
 git -C "$rwrepo" update-ref -d refs/remotes/origin/main
 rt "no base at all asks"               3 "$rwrepo"
 
+# the scratch object dir never outlives the check: not after a normal run, and
+# not when the hook is killed mid-probe (a git shim stalls the probe's cherry)
+mkrw scratchclean
+printf 'A\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
+printf 'B\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm b
+git -C "$rwrepo" checkout -q main
+git -C "$rwrepo" merge -q --squash feat >/dev/null 2>&1
+git -C "$rwrepo" commit -qm "squashed feat"
+sync_origin "$rwrepo"
+tmpd="$sandbox/tmp-scratch"; mkdir -p "$tmpd"
+( cd "$rwrepo" && TMPDIR="$tmpd" "$root/core/checks/branch-delete.sh" 'git branch -d feat' >/dev/null 2>&1 )
+[ -z "$(ls "$tmpd")" ]; _g=$?
+if [ "$_g" -eq 0 ]; then pass=$((pass+1)); else
+    fail=$((fail+1)); echo "FAIL: scratch dir left after a normal run"; fi
+shim="$sandbox/shim"; mkdir -p "$shim"
+cat > "$shim/git" <<SHIM
+#!/bin/sh
+case " \$* " in *" cherry "*) [ -n "\${GIT_OBJECT_DIRECTORY:-}" ] && sleep 2 ;; esac
+exec $(command -v git) "\$@"
+SHIM
+chmod +x "$shim/git"
+( cd "$rwrepo" && TMPDIR="$tmpd" PATH="$shim:$PATH" exec "$root/core/checks/branch-delete.sh" 'git branch -d feat' >/dev/null 2>&1 ) &
+_pid=$!
+_i=0; while [ -z "$(ls "$tmpd")" ] && [ "$_i" -lt 50 ]; do sleep 0.1; _i=$((_i+1)); done
+kill -TERM "$_pid" 2>/dev/null; wait "$_pid" 2>/dev/null
+[ "$_i" -lt 50 ] && [ -z "$(ls "$tmpd")" ]; _g=$?
+if [ "$_g" -eq 0 ]; then pass=$((pass+1)); else
+    fail=$((fail+1)); echo "FAIL: scratch dir left after the check was killed mid-probe"; fi
+
 mkrw squashstash
 printf 'A\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
 printf 'B\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm b
