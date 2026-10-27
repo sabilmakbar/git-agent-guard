@@ -90,6 +90,12 @@ check_branch() {
     git -C "$dir" show-ref --verify --quiet "refs/heads/$branch" || return 0  # remote-only ref: local checks n/a
 
     base=$(git -C "$dir" symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/||')
+    # origin/HEAD can outlive the branch it names (renamed or pruned default
+    # branch). Comparing against a ref that does not exist would refuse with a
+    # message about a base that is not there, so treat it as unknown instead.
+    if [ -n "$base" ] && ! git -C "$dir" show-ref --verify --quiet "refs/remotes/$base"; then
+        base=""
+    fi
     if [ -z "$base" ]; then
         for b in origin/main origin/master; do
             git -C "$dir" show-ref --verify --quiet "refs/remotes/$b" && { base="$b"; break; }

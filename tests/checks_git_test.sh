@@ -206,6 +206,13 @@ _g=$?
 if [ "$_g" -eq 0 ]; then pass=$((pass+1)); else
     fail=$((fail+1)); echo "FAIL: squash-merged allowed from a linked worktree (want 0 got $_g)"; fi
 
+# a stale origin/HEAD naming a branch that no longer exists falls back to
+# origin/main, and with no base left at all the check asks
+git -C "$rwrepo" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/gone
+rt "stale origin/HEAD falls back"      0 "$rwrepo"
+git -C "$rwrepo" update-ref -d refs/remotes/origin/main
+rt "no base at all asks"               3 "$rwrepo"
+
 mkrw squashstash
 printf 'A\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
 printf 'B\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm b
