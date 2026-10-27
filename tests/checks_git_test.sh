@@ -192,6 +192,20 @@ for _sh in /bin/sh bash dash ksh; do
         fail=$((fail+1)); echo "FAIL: squash-merged (N commits) allowed under $_sh (want 0 got $_g)"; fi
 done
 
+# from a subdirectory, git reports the object dir relative to it; the probe
+# must still find the repository's objects
+mkdir -p "$rwrepo/sub"
+( cd "$rwrepo/sub" && "$root/core/checks/branch-delete.sh" 'git branch -d feat' >/dev/null 2>&1 )
+_g=$?
+if [ "$_g" -eq 0 ]; then pass=$((pass+1)); else
+    fail=$((fail+1)); echo "FAIL: squash-merged allowed from a subdirectory (want 0 got $_g)"; fi
+# and from a linked worktree, whose objects live in the common dir
+git -C "$rwrepo" worktree add -q "$sandbox/rw-wt" -b wt main >/dev/null 2>&1
+( cd "$sandbox/rw-wt" && "$root/core/checks/branch-delete.sh" 'git branch -d feat' >/dev/null 2>&1 )
+_g=$?
+if [ "$_g" -eq 0 ]; then pass=$((pass+1)); else
+    fail=$((fail+1)); echo "FAIL: squash-merged allowed from a linked worktree (want 0 got $_g)"; fi
+
 mkrw squashstash
 printf 'A\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
 printf 'B\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm b

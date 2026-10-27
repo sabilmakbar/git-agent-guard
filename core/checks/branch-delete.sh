@@ -117,9 +117,15 @@ check_branch() {
             # read, they do not write.
             mb=$(git -C "$dir" merge-base "refs/remotes/$base" "refs/heads/$branch" 2>/dev/null)
             tree=$(git -C "$dir" rev-parse "refs/heads/$branch^{tree}" 2>/dev/null)
+            # --git-path is relative to $dir when run from a subdirectory
+            # (../.git/objects); resolve it, so the alternate is found
+            # wherever git resolves relative paths from.
             objdir=$(git -C "$dir" rev-parse --git-path objects 2>/dev/null)
+            if [ -n "$objdir" ]; then
+                objdir=$(cd "$dir" 2>/dev/null && cd "$objdir" 2>/dev/null && pwd) || objdir=""
+            fi
             scratch=$(mktemp -d "${TMPDIR:-/tmp}/gag-squash.XXXXXX" 2>/dev/null)
-            if [ -n "$mb" ] && [ -n "$tree" ] && [ -n "$scratch" ]; then
+            if [ -n "$mb" ] && [ -n "$tree" ] && [ -n "$objdir" ] && [ -n "$scratch" ]; then
                 synth=$(env GIT_OBJECT_DIRECTORY="$scratch" GIT_ALTERNATE_OBJECT_DIRECTORIES="$objdir" \
                         git -C "$dir" commit-tree "$tree" -p "$mb" -m gag-squash-probe 2>/dev/null)
                 if [ -n "$synth" ] && _no_new_patches "$synth" "$scratch"; then
