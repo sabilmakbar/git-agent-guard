@@ -52,8 +52,11 @@ t "gh pr view allowed"          allow 'gh pr view 7 --json state'
 git init -q "$sandbox/undecided"
 ( cd "$sandbox/undecided" && printf 'a\n' > f.txt && git add f.txt && git commit -qm init ) >/dev/null 2>&1
 cd "$sandbox/undecided" || exit 1
+echo ATTRIBUTION_CHECK=on > "$XDG_CONFIG_HOME/git-agent-guard/config"
 t "deny outranks ask"           deny  'git add -A && git commit -m "x"'
 t "lone ask still asks"         ask   'git commit -m "x"'
+rm -f "$XDG_CONFIG_HOME/git-agent-guard/config"
+t "attribution ask is opt-in"   allow 'git commit -m "x"'
 cd "$sandbox/repo" || exit 1
 
 mkdir -p "$XDG_CONFIG_HOME/git-agent-guard"

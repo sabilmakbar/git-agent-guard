@@ -30,7 +30,7 @@ history. The two kinds compose, and running both is sensible.
 | A first-time-tracked file needs its own yes | the commit pauses and asks, listing the files |
 | No deleting a branch with work still on it | refused unless merged, pushed, and no stash names it |
 | The right identity for the right remote | a push with the wrong `user.email` is refused (opt-in, see below) |
-| Each repo decides whether commits disclose AI assistance | the first commit in an undecided repo pauses and asks, once |
+| Each repo decides whether commits disclose AI assistance | the first commit in an undecided repo pauses and asks, once (opt-in) |
 
 Every check runs before the command does, from one hook on the agent's shell tool.
 Claude Code is the wired adapter today. The checks themselves are tool-agnostic
@@ -94,8 +94,17 @@ organizations require one; the kit has no business suppressing it.
 ### Whether commits say they were AI-assisted is decided per repo
 
 Your global `attribution` setting is the starting position, not necessarily the
-answer: the choice can belong to the project, so the first commit in a repo with no
-recorded decision pauses and asks, once, and never again for that repo.
+answer: the choice can belong to the project. With the check turned on, the first
+commit in a repo with no recorded decision pauses and asks, once, and never again for
+that repo. It is off by default, since many setups already have the answer decided
+for them; turn it on with one line in `~/.config/git-agent-guard/config`:
+
+```
+ATTRIBUTION_CHECK=on
+```
+
+Only the exact lowercase `on` enables it. Anything else, including a missing line,
+reads as off. The helper below works either way.
 
 ```bash
 bin/gag-attribution include    # commits carry a Co-Authored-By trailer, PRs a footer
@@ -149,10 +158,10 @@ anything.
 
 The asking checks are different, and pausing you is their job. A commit that tracks a
 new file for the first time, the first commit in a repo whose attribution decision has
-not been made, and a push to a remote your identities file does not cover all stop and
-wait for your answer, because those decisions are yours and not the agent's. When two
-checks fire at once, a refusal is what you see: a hard violation outranks a pending
-decision.
+not been made (when that check is on), and a push to a remote your identities file
+does not cover all stop and wait for your answer, because those decisions are yours
+and not the agent's. When two checks fire at once, a refusal is what you see: a hard
+violation outranks a pending decision.
 
 ## Is it working?
 

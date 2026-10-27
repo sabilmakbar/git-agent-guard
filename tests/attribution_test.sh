@@ -38,6 +38,17 @@ ok() { # <name> <cond-rc>
         fail=$((fail+1)); echo "FAIL: $1"; fi
 }
 
+cfgf="$XDG_CONFIG_HOME/git-agent-guard/config"
+mkdir -p "$XDG_CONFIG_HOME/git-agent-guard"
+
+# Opt-in: no config, or anything but the exact `on`, keeps the check silent.
+t "no config: check off"           0 'git commit -m "x"'
+echo ATTRIBUTION_CHECK=On > "$cfgf"
+t "wrong case: check off"          0 'git commit -m "x"'
+echo "ATTRIBUTION_CHECK=on # x" > "$cfgf"
+t "trailing text: check off"       0 'git commit -m "x"'
+printf 'MODE=managed\nATTRIBUTION_CHECK=on\n' > "$cfgf"
+
 t "undecided repo asks on commit"  3 'git commit -m "x"'
 t "non-commit command passes"      0 'git status'
 

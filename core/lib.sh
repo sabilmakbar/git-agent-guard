@@ -66,6 +66,21 @@ gag_mode() {
     esac
 }
 
+# gag_attribution_check -> prints on|off.
+# The per-repo attribution ask is opt-in: many setups have the footer decided
+# for them (by the user's global setting, or an organization's policy), and
+# asking there only adds a pause. Strict like MODE, but in the other direction:
+# only the exact spelling `on` enables it, and anything else reads as off.
+gag_attribution_check() {
+    _cfg="${XDG_CONFIG_HOME:-$HOME/.config}/git-agent-guard/config"
+    _a=""
+    [ -f "$_cfg" ] && _a=$(sed -n 's/^ATTRIBUTION_CHECK=//p' "$_cfg" | head -1)
+    case "$_a" in
+        on) printf 'on'  ;;
+        *)  printf 'off' ;;
+    esac
+}
+
 # gag_workdir CMD -> prints the directory git will run in, resolving the two
 # common prefixes: `cd <path> && git ...` and `git -C <path> ...`. Falls back
 # to the current directory. Best-effort; unresolvable paths print nothing.

@@ -110,7 +110,9 @@ fi
 act "Writing mode to $cfg_dir/config"
 if [ "$dry" -eq 0 ]; then
     mkdir -p "$cfg_dir"
-    printf 'MODE=%s\n' "$mode" > "$cfg_dir/config"
+    # Replace only the MODE line; other keys (ATTRIBUTION_CHECK) are the user's.
+    { grep -v '^MODE=' "$cfg_dir/config" 2>/dev/null; printf 'MODE=%s\n' "$mode"; } > "$cfg_dir/config.tmp" \
+      && mv "$cfg_dir/config.tmp" "$cfg_dir/config"
     printf 'hook_command=%s\n' "$adapter" > "$manifest"
 fi
 
