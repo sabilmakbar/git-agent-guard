@@ -207,7 +207,13 @@ get). The same one-liner with `"ls"` as the command should print nothing at all.
   negatives. Every check ships a test corpus, and a check that errors on its own bug
   is treated as a pass rather than locking you out.
 - **Checks that need repo state read only.** The new-file and branch checks run
-  read-only git queries at hook time and never modify anything.
+  read-only git queries at hook time and never modify anything. The branch check
+  builds a throwaway commit to recognise squashed work, and writes it to a scratch
+  directory so the repository it is inspecting is left untouched.
+- **A branch merged by rebase or squash can still be deleted.** Those merges put
+  the content on the base under a new SHA, so ancestry alone would refuse forever.
+  The check compares patches when ancestry fails, and refuses only when something
+  on the branch is genuinely absent from the base.
 - Works on macOS (bash 3.2, BSD tools) and Linux. CI runs the suites on both.
 
 ## FAQ

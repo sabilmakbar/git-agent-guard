@@ -83,6 +83,181 @@ printf '%s\n' "no-such-host.invalid x@y.invalid" > "$XDG_CONFIG_HOME/git-agent-g
 t "unmapped remote asks"           3 push-identity.sh 'git push origin main'
 t "non-push passes"                0 push-identity.sh 'git fetch origin'
 
+# --- branch-delete: history-rewriting merges --------------------------------
+# A rebase, squash or cherry-pick puts the branch's content on the base under a
+# new SHA, so ancestry is false even though nothing would be stranded. Each
+# scenario gets its own repo with its own bare origin.
+
+mkrw() { # <name> -> $rwrepo, a clone with origin/main and a feat branch off base
+    rwrepo="$sandbox/rw-$1"
+    git init -q --bare "$rwrepo.origin"
+    git init -q "$rwrepo"
+    git -C "$rwrepo" remote add origin "$rwrepo.origin"
+    printf 'base\n' > "$rwrepo/f.txt"
+    git -C "$rwrepo" add f.txt
+    git -C "$rwrepo" commit -qm base
+    git -C "$rwrepo" push -qu origin main
+    git -C "$rwrepo" checkout -qb feat
+}
+
+sync_origin() { git -C "$1" push -q origin main; git -C "$1" fetch -q origin; }
+
+rt() { # <name> <want-rc> <repo> ; delete of 'feat' in that repo
+    _n=$1; _w=$2; _r=$3
+    ( cd "$_r" && "$root/core/checks/branch-delete.sh" 'git branch -d feat' >/dev/null 2>&1 )
+    _g=$?
+    if [ "$_g" -eq "$_w" ]; then pass=$((pass+1)); else
+        fail=$((fail+1)); echo "FAIL: $_n (want $_w got $_g)"; fi
+}
+
+# rebase-merge: the contribution is replayed onto main, branch left behind
+mkrw rebase
+printf 'A\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
+git -C "$rwrepo" checkout -q main
+printf 'other\n' > "$rwrepo/g.txt"; git -C "$rwrepo" add g.txt; git -C "$rwrepo" commit -qm "main moves on"
+git -C "$rwrepo" checkout -q -b tmp feat
+git -C "$rwrepo" rebase main >/dev/null 2>&1
+git -C "$rwrepo" checkout -q main
+git -C "$rwrepo" merge -q --ff-only tmp >/dev/null 2>&1
+git -C "$rwrepo" branch -qD tmp
+sync_origin "$rwrepo"
+rt "rebase-merged branch allowed"      0 "$rwrepo"
+
+# squash-merge of a single commit
+mkrw squash1
+printf 'A\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
+git -C "$rwrepo" checkout -q main
+git -C "$rwrepo" merge -q --squash feat >/dev/null 2>&1
+git -C "$rwrepo" commit -qm "squashed feat"
+sync_origin "$rwrepo"
+rt "squash-merged (1 commit) allowed"  0 "$rwrepo"
+
+# squash-merge of several commits: no individual patch matches, only the
+# branch taken as a whole does
+mkrw squashN
+printf 'A\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
+printf 'B\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm b
+git -C "$rwrepo" checkout -q main
+git -C "$rwrepo" merge -q --squash feat >/dev/null 2>&1
+git -C "$rwrepo" commit -qm "squashed feat"
+sync_origin "$rwrepo"
+rt "squash-merged (N commits) allowed" 0 "$rwrepo"
+
+# the other direction: part of the branch was squashed in, part never left it
+mkrw partial
+printf 'A\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
+git -C "$rwrepo" checkout -q main
+git -C "$rwrepo" merge -q --squash feat >/dev/null 2>&1
+git -C "$rwrepo" commit -qm "squashed only the first commit"
+sync_origin "$rwrepo"
+git -C "$rwrepo" checkout -q feat
+printf 'NEVER-MERGED\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm b
+git -C "$rwrepo" checkout -q main
+rt "partially merged still refused"    1 "$rwrepo"
+
+# and a branch whose work never reached the base at all
+mkrw none
+printf 'NEVER\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
+git -C "$rwrepo" checkout -q main
+printf 'other\n' > "$rwrepo/g.txt"; git -C "$rwrepo" add g.txt; git -C "$rwrepo" commit -qm "main moves on"
+sync_origin "$rwrepo"
+rt "unmerged branch still refused"     1 "$rwrepo"
+
+# the squash probe must not leave anything behind in the repo it inspects
+before=$(find "$rwrepo/.git/objects" -type f | wc -l | tr -d ' ')
+( cd "$rwrepo" && "$root/core/checks/branch-delete.sh" 'git branch -d feat' >/dev/null 2>&1 )
+after=$(find "$rwrepo/.git/objects" -type f | wc -l | tr -d ' ')
+if [ "$before" -eq "$after" ]; then pass=$((pass+1)); else
+    fail=$((fail+1)); echo "FAIL: check wrote objects into the repo ($before -> $after)"; fi
+
+# The squash probe hands its scratch object store to git. POSIX leaves it
+# unspecified whether assignments in front of a function call reach the
+# commands inside it, and whether they outlive it: ksh drops them for git
+# (the squash goes unrecognised) and keeps them afterwards (a GIT_OBJECT_
+# DIRECTORY left pointing at the deleted scratch dir would fail every later
+# query, and the stash and unpushed checks would pass by error). So run the
+# check under each shell at hand, in both directions.
+mkrw squashsh
+printf 'A\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
+printf 'B\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm b
+git -C "$rwrepo" checkout -q main
+git -C "$rwrepo" merge -q --squash feat >/dev/null 2>&1
+git -C "$rwrepo" commit -qm "squashed feat"
+sync_origin "$rwrepo"
+for _sh in /bin/sh bash dash ksh; do
+    command -v "$_sh" >/dev/null 2>&1 || continue
+    ( cd "$rwrepo" && "$_sh" "$root/core/checks/branch-delete.sh" 'git branch -d feat' >/dev/null 2>&1 )
+    _g=$?
+    if [ "$_g" -eq 0 ]; then pass=$((pass+1)); else
+        fail=$((fail+1)); echo "FAIL: squash-merged (N commits) allowed under $_sh (want 0 got $_g)"; fi
+done
+
+# from a subdirectory, git reports the object dir relative to it; the probe
+# must still find the repository's objects
+mkdir -p "$rwrepo/sub"
+( cd "$rwrepo/sub" && "$root/core/checks/branch-delete.sh" 'git branch -d feat' >/dev/null 2>&1 )
+_g=$?
+if [ "$_g" -eq 0 ]; then pass=$((pass+1)); else
+    fail=$((fail+1)); echo "FAIL: squash-merged allowed from a subdirectory (want 0 got $_g)"; fi
+# and from a linked worktree, whose objects live in the common dir
+git -C "$rwrepo" worktree add -q "$sandbox/rw-wt" -b wt main >/dev/null 2>&1
+( cd "$sandbox/rw-wt" && "$root/core/checks/branch-delete.sh" 'git branch -d feat' >/dev/null 2>&1 )
+_g=$?
+if [ "$_g" -eq 0 ]; then pass=$((pass+1)); else
+    fail=$((fail+1)); echo "FAIL: squash-merged allowed from a linked worktree (want 0 got $_g)"; fi
+
+# a stale origin/HEAD naming a branch that no longer exists falls back to
+# origin/main, and with no base left at all the check asks
+git -C "$rwrepo" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/gone
+rt "stale origin/HEAD falls back"      0 "$rwrepo"
+git -C "$rwrepo" update-ref -d refs/remotes/origin/main
+rt "no base at all asks"               3 "$rwrepo"
+
+# the scratch object dir never outlives the check: not after a normal run, and
+# not when the hook is killed mid-probe (a git shim stalls the probe's cherry)
+mkrw scratchclean
+printf 'A\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
+printf 'B\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm b
+git -C "$rwrepo" checkout -q main
+git -C "$rwrepo" merge -q --squash feat >/dev/null 2>&1
+git -C "$rwrepo" commit -qm "squashed feat"
+sync_origin "$rwrepo"
+tmpd="$sandbox/tmp-scratch"; mkdir -p "$tmpd"
+( cd "$rwrepo" && TMPDIR="$tmpd" "$root/core/checks/branch-delete.sh" 'git branch -d feat' >/dev/null 2>&1 )
+[ -z "$(ls "$tmpd")" ]; _g=$?
+if [ "$_g" -eq 0 ]; then pass=$((pass+1)); else
+    fail=$((fail+1)); echo "FAIL: scratch dir left after a normal run"; fi
+shim="$sandbox/shim"; mkdir -p "$shim"
+cat > "$shim/git" <<SHIM
+#!/bin/sh
+case " \$* " in *" cherry "*) [ -n "\${GIT_OBJECT_DIRECTORY:-}" ] && sleep 2 ;; esac
+exec $(command -v git) "\$@"
+SHIM
+chmod +x "$shim/git"
+( cd "$rwrepo" && TMPDIR="$tmpd" PATH="$shim:$PATH" exec "$root/core/checks/branch-delete.sh" 'git branch -d feat' >/dev/null 2>&1 ) &
+_pid=$!
+_i=0; while [ -z "$(ls "$tmpd")" ] && [ "$_i" -lt 50 ]; do sleep 0.1; _i=$((_i+1)); done
+kill -TERM "$_pid" 2>/dev/null; wait "$_pid" 2>/dev/null
+[ "$_i" -lt 50 ] && [ -z "$(ls "$tmpd")" ]; _g=$?
+if [ "$_g" -eq 0 ]; then pass=$((pass+1)); else
+    fail=$((fail+1)); echo "FAIL: scratch dir left after the check was killed mid-probe"; fi
+
+mkrw squashstash
+printf 'A\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm a
+printf 'B\n' >> "$rwrepo/f.txt"; git -C "$rwrepo" add f.txt; git -C "$rwrepo" commit -qm b
+printf 'wip\n' > "$rwrepo/w.txt"; git -C "$rwrepo" stash -qu
+git -C "$rwrepo" checkout -q main
+git -C "$rwrepo" merge -q --squash feat >/dev/null 2>&1
+git -C "$rwrepo" commit -qm "squashed feat"
+sync_origin "$rwrepo"
+for _sh in /bin/sh bash dash ksh; do
+    command -v "$_sh" >/dev/null 2>&1 || continue
+    ( cd "$rwrepo" && "$_sh" "$root/core/checks/branch-delete.sh" 'git branch -d feat' >/dev/null 2>&1 )
+    _g=$?
+    if [ "$_g" -eq 1 ]; then pass=$((pass+1)); else
+        fail=$((fail+1)); echo "FAIL: squash-merged + WIP stash refused under $_sh (want 1 got $_g)"; fi
+done
+
 echo "----"
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]

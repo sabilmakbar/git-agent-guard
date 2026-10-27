@@ -60,7 +60,35 @@ fi
 [ -n "$branches" ] || exit 0
 
 dir=$(gag_workdir "$cmd")
+
+# The squash probe's scratch object dir is removed however the check ends,
+# including when the hook is interrupted mid-probe.
+scratch=""
+trap '[ -z "$scratch" ] || rm -rf "$scratch"' EXIT
+trap 'exit 1' HUP INT TERM
 git -C "$dir" rev-parse --git-dir >/dev/null 2>&1 || exit 0
+
+# _no_new_patches <ref> [scratch] -> rc 0 when every commit the ref adds is
+# already in the base as a patch. `git cherry` marks patch-equivalent commits
+# "-" and genuinely new ones "+", so an absence of "+" means nothing would be
+# stranded. With a scratch object dir, git reads it first and the repository's
+# own objects ($objdir) as an alternate.
+# A failed `git cherry` returns 1 rather than an empty result: an error must
+# read as "cannot show this is merged", never as permission to delete.
+# The object-dir variables go to git through env, never as assignments in
+# front of this function: POSIX leaves it unspecified whether those reach the
+# commands inside it and whether they outlive the call. ksh drops them for git
+# and keeps them afterwards, and a GIT_OBJECT_DIRECTORY left pointing at the
+# deleted scratch dir would make every later git query here fail.
+_no_new_patches() {
+    if [ -n "${2:-}" ]; then
+        _cherry=$(env GIT_OBJECT_DIRECTORY="$2" GIT_ALTERNATE_OBJECT_DIRECTORIES="$objdir" \
+                  git -C "$dir" cherry "refs/remotes/$base" "$1" 2>/dev/null) || return 1
+    else
+        _cherry=$(git -C "$dir" cherry "refs/remotes/$base" "$1" 2>/dev/null) || return 1
+    fi
+    ! printf '%s\n' "$_cherry" | grep -q '^+'
+}
 
 # check_branch NAME -> 0 safe to delete; otherwise prints why and returns the rc.
 check_branch() {
@@ -68,6 +96,12 @@ check_branch() {
     git -C "$dir" show-ref --verify --quiet "refs/heads/$branch" || return 0  # remote-only ref: local checks n/a
 
     base=$(git -C "$dir" symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/||')
+    # origin/HEAD can outlive the branch it names (renamed or pruned default
+    # branch). Comparing against a ref that does not exist would refuse with a
+    # message about a base that is not there, so treat it as unknown instead.
+    if [ -n "$base" ] && ! git -C "$dir" show-ref --verify --quiet "refs/remotes/$base"; then
+        base=""
+    fi
     if [ -z "$base" ]; then
         for b in origin/main origin/master; do
             git -C "$dir" show-ref --verify --quiet "refs/remotes/$b" && { base="$b"; break; }
@@ -79,8 +113,45 @@ check_branch() {
     fi
 
     if ! git -C "$dir" merge-base --is-ancestor "refs/heads/$branch" "refs/remotes/$base" 2>/dev/null; then
-        echo "Branch '$branch' has commits not reached $base — deleting would strand them. Allowed next: run \`git log $base..$branch\` to show the user what would be lost, and let them decide; deletion stays blocked until the branch is fully merged."
-        return 1
+        # Ancestry is the cheap test and it is only correct for a plain merge. Every
+        # history-rewriting merge (rebase, squash, cherry-pick) lands the same content
+        # under new SHAs, leaving ancestry false forever and the branch permanently
+        # undeletable through this check. So compare patches before refusing.
+        merged_anyway=no
+
+        if _no_new_patches "refs/heads/$branch"; then
+            merged_anyway=yes
+        else
+            # A squash of several commits matches none of them individually, so
+            # rebuild the branch as the single commit a squash would have produced
+            # and ask about that instead. New objects are written to a scratch
+            # directory, never into the repository being inspected: these checks
+            # read, they do not write.
+            mb=$(git -C "$dir" merge-base "refs/remotes/$base" "refs/heads/$branch" 2>/dev/null)
+            tree=$(git -C "$dir" rev-parse "refs/heads/$branch^{tree}" 2>/dev/null)
+            # --git-path is relative to $dir when run from a subdirectory
+            # (../.git/objects); resolve it, so the alternate is found
+            # wherever git resolves relative paths from.
+            objdir=$(git -C "$dir" rev-parse --git-path objects 2>/dev/null)
+            if [ -n "$objdir" ]; then
+                objdir=$(cd "$dir" 2>/dev/null && cd "$objdir" 2>/dev/null && pwd) || objdir=""
+            fi
+            scratch=$(mktemp -d "${TMPDIR:-/tmp}/gag-squash.XXXXXX" 2>/dev/null)
+            if [ -n "$mb" ] && [ -n "$tree" ] && [ -n "$objdir" ] && [ -n "$scratch" ]; then
+                synth=$(env GIT_OBJECT_DIRECTORY="$scratch" GIT_ALTERNATE_OBJECT_DIRECTORIES="$objdir" \
+                        git -C "$dir" commit-tree "$tree" -p "$mb" -m gag-squash-probe 2>/dev/null)
+                if [ -n "$synth" ] && _no_new_patches "$synth" "$scratch"; then
+                    merged_anyway=yes
+                fi
+            fi
+            [ -z "$scratch" ] || rm -rf "$scratch"
+            scratch=""
+        fi
+
+        if [ "$merged_anyway" = no ]; then
+            echo "Branch '$branch' has commits not reached $base, by SHA or by patch, so deleting would strand them. Allowed next: run \`git log $base..$branch\` to show the user what would be lost, and let them decide; deletion stays blocked until the branch is fully merged."
+            return 1
+        fi
     fi
 
     if git -C "$dir" rev-parse --verify --quiet "$branch@{upstream}" >/dev/null 2>&1; then
