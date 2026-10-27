@@ -15,6 +15,15 @@ cmd="${1:-}"
 
 stripped=$(gag_strip_quoted "$cmd")
 
+# `git commit -a` is the same chain in one command: it stages every tracked
+# change and commits it. Short flags may be clustered (-am, -va); the cluster
+# is only read up to the first flag that takes a value (-m, -F, -C, -c, -t,
+# -S, -u), so a value like -mall is not mistaken for -a.
+if gag_git_verb "$stripped" commit '-[^-[:space:];&|mFCctSu]*a[^[:space:];&|]*|--all'; then
+    echo "This commit uses -a/--all, which stages and commits in one step. Run them as two separate calls so staging can be reviewed on its own: send \`git add ...\` with the paths first, then \`git commit ...\` without -a once it returns."
+    exit 1
+fi
+
 gag_git_verb "$stripped" add    || exit 0
 gag_git_verb "$stripped" commit || exit 0
 

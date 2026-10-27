@@ -25,7 +25,7 @@ history. The two kinds compose, and running both is sensible.
 
 | Rule | What happens |
 |---|---|
-| Stage and commit are two separate approvals | a chained `add` and `commit` is refused, with the fix in the message |
+| Stage and commit are two separate approvals | a chained `add` and `commit`, or `commit -a`, is refused, with the fix in the message |
 | Agents open PRs, humans merge them | `gh pr merge` and API merge calls are refused |
 | A first-time-tracked file needs its own yes | the commit pauses and asks, listing the files |
 | No deleting a branch with work still on it | refused unless merged, pushed, and no stash names it |

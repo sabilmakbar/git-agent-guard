@@ -8,8 +8,9 @@ support should use a real adapter instead (see `adapters/`).
 
 ## Git workflow rules
 
-- Run `git add` and `git commit` as two separate commands, never chained.
-  Staging is reviewed on its own before anything is committed.
+- Run `git add` and `git commit` as two separate commands, never chained,
+  and never `git commit -a`. Staging is reviewed on its own before anything
+  is committed.
 - Never merge pull requests (`gh pr merge`, merge API endpoints, or UI).
   Opening PRs is your job; merging is always the human's.
 - Before a commit that tracks a file for the first time, list the new files

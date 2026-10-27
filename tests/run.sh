@@ -57,6 +57,20 @@ hello
 EOF
 git add -A && git commit -m "x"'
 t "empty command allowed"            0 staging-separation.sh ''
+t "commit -a denied"                 1 staging-separation.sh 'git commit -a -m "x"'
+t "commit --all denied"              1 staging-separation.sh 'git commit --all -m "x"'
+t "commit -am denied"                1 staging-separation.sh 'git commit -am "x"'
+t "commit -qam denied"               1 staging-separation.sh 'git commit -qam "x"'
+t "commit -a after message denied"   1 staging-separation.sh 'git commit -m "x" -a'
+t "commit -a with globals denied"    1 staging-separation.sh 'git -C /tmp/r commit -va'
+t "commit -a in a chain denied"      1 staging-separation.sh 'git status && git commit -a -m "x" && git push'
+t "commit; then -a elsewhere ok"     0 staging-separation.sh 'git commit -m "x"; ls -a'
+t "commit --amend allowed"           0 staging-separation.sh 'git commit --amend --no-edit'
+t "commit --allow-empty allowed"     0 staging-separation.sh 'git commit --allow-empty -m "x"'
+t "commit -m value with a allowed"   0 staging-separation.sh 'git commit -mall'
+t "commit path named a allowed"      0 staging-separation.sh 'git commit -m "x" a.txt'
+t "-a only in message allowed"       0 staging-separation.sh 'git commit -m "use git commit -a"'
+t "add+commit no-space chain denied" 1 staging-separation.sh 'git add -A && git commit&& true'
 
 # --- verb matching through global options and launch prefixes --------------
 t "-c key=val chain denied"          1 staging-separation.sh 'git -c core.x=1 add -A && git commit -m "x"'

@@ -45,15 +45,19 @@ gag_strip_quoted() {
 # one-word bypass.
 GAG_CMD_POS='(^|[;&|])[[:space:]]*((command|env)[[:space:]]+|-[^[:space:]]*[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*([^[:space:];&|]*/)?'
 
-# gag_git_verb STRIPPED VERB -> rc 0 when `git VERB` is actually invoked.
+# gag_git_verb STRIPPED VERB [ARG] -> rc 0 when `git VERB` is actually invoked;
+# with ARG (an ERE for one whole argument token), only when that same
+# invocation carries such an argument before the next ; & | or line end.
 # Any global options may sit between git and the verb: every dash token
 # (--no-pager, -P, -c<k=v>, --git-dir=<p>, --namespace=<n>, ...), plus the
 # separate argument of the options that take one (-C <p>, -c <k=v>, ...). The
 # argument is optional in the pattern because a quoted one has already been
 # stripped away, and `git -c "k=v" commit` must still read as a commit.
 gag_git_verb() {
+    _arg=""
+    [ -n "${3:-}" ] && _arg="([[:space:]]+[^;&|[:space:]]*)*[[:space:]]+($3)"
     printf '%s' "$1" \
-      | grep -qE "${GAG_CMD_POS}git([[:space:]]+(-C|-c|--git-dir|--work-tree|--namespace|--config-env)([[:space:]]+[^-[:space:]][^[:space:]]*)?|[[:space:]]+-[^[:space:]]*)*[[:space:]]+$2([[:space:]]|$)"
+      | grep -qE "${GAG_CMD_POS}git([[:space:]]+(-C|-c|--git-dir|--work-tree|--namespace|--config-env)([[:space:]]+[^-[:space:]][^[:space:]]*)?|[[:space:]]+-[^[:space:]]*)*[[:space:]]+$2${_arg}([[:space:]]|$|[;&|])"
 }
 
 # gag_gh_words STRIPPED W1 W2 -> rc 0 when `gh W1 W2` is actually invoked.
