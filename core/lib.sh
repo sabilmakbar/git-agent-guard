@@ -9,10 +9,12 @@
 #   exit 3 = needs the user's judgment, ask; one human message on stdout
 #   other  = check error; adapters treat as pass and report (never lock the user out on a bug)
 
-# gag_strip_quoted CMD -> stdout: CMD with quoted spans and heredoc bodies
-# removed. A command that merely NAMES a verb must not match: grep patterns,
-# commit-message text, and heredoc payloads (writing a script or a test whose
-# CONTENT contains git commands) are all data rather than invocations. The
+# gag_strip_quoted CMD [PH] -> stdout: CMD with quoted spans and heredoc bodies
+# removed; with PH, each quoted span becomes PH instead, so a check that counts
+# arguments still sees one there. A command that merely NAMES a verb must not
+# match: grep patterns, commit-message text, and heredoc payloads (writing a
+# script or a test whose CONTENT contains git commands) are all data rather
+# than invocations. The
 # heredoc case is not hypothetical — it blocked two real edits to this repo
 # before being handled here.
 gag_strip_quoted() {
@@ -34,11 +36,11 @@ gag_strip_quoted() {
             next
         }
         { print }
-    ' | awk -v q="'" '
+    ' | awk -v q="'" -v ph="${2:-}" '
         # Quoted spans are removed across line breaks, not line by line: a
         # multi-line commit message is one span, and its second line is data.
         { s = s (NR > 1 ? "\n" : "") $0 }
-        END { gsub(q "[^" q "]*" q, "", s); gsub(/"[^"]*"/, "", s); print s }
+        END { gsub(q "[^" q "]*" q, ph, s); gsub(/"[^"]*"/, ph, s); print s }
     '
 }
 

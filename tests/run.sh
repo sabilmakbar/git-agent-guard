@@ -71,9 +71,47 @@ t "commit; then -a elsewhere ok"     0 staging-separation.sh 'git commit -m "x";
 t "commit --amend allowed"           0 staging-separation.sh 'git commit --amend --no-edit'
 t "commit --allow-empty allowed"     0 staging-separation.sh 'git commit --allow-empty -m "x"'
 t "commit -m value with a allowed"   0 staging-separation.sh 'git commit -mall'
-t "commit path named a allowed"      0 staging-separation.sh 'git commit -m "x" a.txt'
+t "commit message a allowed"         0 staging-separation.sh 'git commit -m a'
 t "-a only in message allowed"       0 staging-separation.sh 'git commit -m "use git commit -a"'
 t "add+commit no-space chain denied" 1 staging-separation.sh 'git add -A && git commit&& true'
+
+# commit naming paths stages and commits them in one step
+t "commit <path> denied"             1 staging-separation.sh 'git commit f.txt'
+t "commit -m x <path> denied"        1 staging-separation.sh 'git commit -m "x" f.txt'
+t "commit -mx <path> denied"         1 staging-separation.sh 'git commit -mx f.txt'
+t "commit after -- denied"           1 staging-separation.sh 'git commit -m "x" -- f.txt'
+t "commit quoted path denied"        1 staging-separation.sh 'git commit -m "x" "my file.txt"'
+t "commit -i denied"                 1 staging-separation.sh 'git commit -i -m "x"'
+t "commit --include denied"          1 staging-separation.sh 'git commit --include -m "x"'
+t "commit -o denied"                 1 staging-separation.sh 'git commit -o -m "x"'
+t "commit --only denied"             1 staging-separation.sh 'git commit --only -m "x"'
+t "commit clustered -vi denied"      1 staging-separation.sh 'git commit -vi -m "x"'
+t "commit --pathspec-from-file denied" 1 staging-separation.sh 'git commit --pathspec-from-file=list.txt -m "x"'
+t "commit with globals, path denied" 1 staging-separation.sh 'git -C /tmp/r commit -m "x" .'
+t "second commit names path denied"  1 staging-separation.sh 'git commit -m "x"; git commit f.txt'
+t "plain commit allowed"             0 staging-separation.sh 'git commit'
+t "commit -mvalue allowed"           0 staging-separation.sh 'git commit -mfix'
+t "commit -F file allowed"           0 staging-separation.sh 'git commit -F msg.txt'
+t "commit -F - heredoc allowed"      0 staging-separation.sh 'git commit -F - <<EOF
+subject words here
+EOF'
+t "commit -C/-c commit allowed"      0 staging-separation.sh 'git commit -C HEAD && git commit -c HEAD~1'
+t "commit -t template allowed"       0 staging-separation.sh 'git commit -t tpl.txt'
+t "commit long values allowed"       0 staging-separation.sh 'git commit --author "A <a@x>" --date now --trailer "k: v" --cleanup strip -m "x"'
+t "commit long = values allowed"     0 staging-separation.sh 'git commit --author=a --date=now --message=x'
+t "commit --fixup/--squash allowed"  0 staging-separation.sh 'git commit --fixup HEAD && git commit --squash=HEAD'
+t "commit -S / -Skey allowed"        0 staging-separation.sh 'git commit -S -m "x" && git commit -SABCD -m "x"'
+t "commit --no-verify allowed"       0 staging-separation.sh 'git commit --no-verify -m "x"'
+t "commit redirections allowed"      0 staging-separation.sh 'git commit -m "x" 2>&1 >/dev/null > out.txt | tail -1'
+t "commit trailing comment allowed"  0 staging-separation.sh 'git commit -m x # done'
+t "commit multi-line message ok"     0 staging-separation.sh 'git commit -m "subject
+
+body line with words"'
+t "commit message via heredoc ok"    0 staging-separation.sh 'git commit -m "$(cat <<'"'"'EOF'"'"'
+subject (with parens
+body words
+EOF
+)"'
 
 # --- verb matching through global options and launch prefixes --------------
 t "-c key=val chain denied"          1 staging-separation.sh 'git -c core.x=1 add -A && git commit -m "x"'
