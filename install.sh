@@ -1,7 +1,8 @@
 #!/bin/sh
 # git-agent-guard installer. Agent-layer (v1): wires the Claude Code adapter
-# as a PreToolUse hook. Runs from the clone — nothing is copied; update with
-# git pull. Attribution settings are left alone: footers are the user's and
+# as a PreToolUse hook. Runs from the clone — nothing is copied; update a
+# tag-pinned clone by fetching tags and checking out the desired release.
+# Attribution settings are left alone: footers are the user's and
 # their organization's policy, not this kit's.
 #
 #   ./install.sh --mode managed|advisory [--dry-run]
