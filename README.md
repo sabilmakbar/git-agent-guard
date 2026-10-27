@@ -31,7 +31,6 @@ history. The two kinds compose, and running both is sensible.
 | No deleting a branch with work still on it | refused unless merged, pushed, and no stash names it |
 | The right identity for the right remote | a push with the wrong `user.email` is refused (opt-in, see below) |
 | Each repo decides whether commits disclose AI assistance | the first commit in an undecided repo pauses and asks, once |
-| No agent-attribution footer in PR bodies | covered by a native setting, written at install |
 
 Every check runs before the command does, from one hook on the agent's shell tool.
 Claude Code is the wired adapter today. The checks themselves are tool-agnostic
@@ -88,16 +87,15 @@ git clone https://github.com/sabilmakbar/git-agent-guard.git ~/git-agent-guard
 The kit runs from the clone, so keep the folder where you cloned it. Hooks apply from
 your next Claude Code session, not the current one.
 
-The install also sets Claude Code's `attribution` keys empty, which is the native way
-to keep agent footers out of commit messages and PR bodies. If you already have
-`attribution` set to something, the installer reports it and leaves yours alone.
+The install does not touch Claude Code's `attribution` keys. Whether commits and PR
+bodies carry an agent footer is your policy, or your organization's, and some
+organizations require one; the kit has no business suppressing it.
 
 ### Whether commits say they were AI-assisted is decided per repo
 
-That empty `attribution.commit` is a starting position, not the answer: it means no
-commit silently gains a `Co-Authored-By` trailer before anyone chose. The choice
-itself belongs to the project, so the first commit in a repo with no recorded
-decision pauses and asks, once, and never again for that repo.
+Your global `attribution` setting is the starting position, not necessarily the
+answer: the choice can belong to the project, so the first commit in a repo with no
+recorded decision pauses and asks, once, and never again for that repo.
 
 ```bash
 bin/gag-attribution include    # commits here carry a Co-Authored-By trailer
@@ -212,11 +210,11 @@ these reports.
 ~/git-agent-guard/install.sh --uninstall
 ```
 
-Takes the kit's hook entry back out of `~/.claude/settings.json`, removes the
-`attribution` keys only if the kit was the one that set them, and deletes the kit's
-config and manifest. Hooks it did not write are not touched. A backup of your
-settings from just before the removal is left next to the file. Your identities file
-stays, since you wrote it.
+Takes the kit's hook entry back out of `~/.claude/settings.json` and deletes the
+kit's config and manifest. Older versions of the installer set the `attribution`
+keys; if yours did, uninstall says so and leaves them for you to keep or remove.
+Hooks it did not write are not touched. A backup of your settings from just before
+the removal is left next to the file. Your identities file stays, since you wrote it.
 
 ## Working on the kit
 
