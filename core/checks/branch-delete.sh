@@ -21,6 +21,7 @@ stripped=$(gag_strip_quoted "$cmd")
 # short cluster like -fd) or when written :branch. Options that take a separate
 # value (-o, --repo, ...) have it skipped so it is not read as the remote.
 gag_push_deletes() {
+    # shellcheck disable=SC2020  # each of ; & | becomes a newline, one segment per command
     printf '%s\n' "$1" | tr ';&|' '\n\n\n' | while IFS= read -r seg; do
         gag_git_verb "$seg" push || continue
         printf '%s\n' "$seg" | awk '{

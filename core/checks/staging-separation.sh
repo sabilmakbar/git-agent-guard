@@ -31,6 +31,7 @@ fi
 # Quoted spans become one placeholder word: `git commit -m "x" file` still has
 # a path, and `git commit "my file"` is one.
 commit_paths() {
+    # shellcheck disable=SC2020  # each of ; & | becomes a newline, one segment per command
     gag_strip_quoted "$cmd" _Q_ \
       | sed 's/[0-9]*[<>]&[0-9-]*/ /g; s/&>/>/g' \
       | tr ';&|' '\n\n\n' | while IFS= read -r seg; do
