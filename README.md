@@ -179,6 +179,30 @@ The left column is any substring of the remote URL. With the file in place, a pu
 from a repo whose `user.email` does not match its remote's line is refused, and a push
 to a remote no line covers pauses and asks. No file at all means the check is off.
 
+### Commit-message checking is opt-in
+
+A commit message is permanent and usually pushed, so personal details in one cannot
+be removed later without rewriting history. With the check on, a `git commit` command
+that contains an email address or a home-directory path (`/Users/<name>`, `/home/<name>`)
+pauses and asks. It is off by default; turn it on in `~/.config/git-agent-guard/config`:
+
+```
+COMMIT_MSG_CHECK=on
+```
+
+Only the exact lowercase `on` enables it. To also catch your own private words (an
+employer name, a ticket-key pattern), list them in
+`~/.config/git-agent-guard/commit-message-terms`: one extended regex per line, blank
+lines and `#` comments ignored, matched case-insensitively.
+
+It reads only the text after the `commit` word, so a `git -C <path>` or `cd <path> &&`
+prefix is not mistaken for message text. The `noreply` address of the attribution
+trailer and `git@host` remotes are not counted. A message read from a file
+(`-F <file>`, `--file=<file>`) is scanned too, when the file exists at that moment;
+`-F -` is read from the heredoc in the command. A file that an earlier command will
+create, or a path with a space in it, cannot be read. The verdict is an ask, not a
+deny, because a match may be intended.
+
 ## What you will notice day to day
 
 Mostly nothing. The checks are silent on every command that follows the rules.

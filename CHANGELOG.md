@@ -3,6 +3,12 @@
 Notable changes, newest first. Versions identify tagged states of this repository;
 the guard runs from its checkout and does not depend on the sibling kits' versions.
 
+## Unreleased
+
+- Adds an opt-in commit-message check (`COMMIT_MSG_CHECK=on`): a `git commit` command
+  with an email address, a home-directory path, or a term from the user's own
+  `commit-message-terms` list pauses and asks.
+
 ## 0.1.0
 
 First release of git-agent-guard. It provides a Claude Code PreToolUse adapter and

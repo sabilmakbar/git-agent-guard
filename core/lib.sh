@@ -103,6 +103,18 @@ gag_attribution_check() {
     esac
 }
 
+# gag_commit_msg_check -> prints on|off. Opt-in, strict like the attribution
+# check: only the exact spelling `on` enables it.
+gag_commit_msg_check() {
+    _cfg="${XDG_CONFIG_HOME:-$HOME/.config}/git-agent-guard/config"
+    _c=""
+    [ -f "$_cfg" ] && _c=$(sed -n 's/^COMMIT_MSG_CHECK=//p' "$_cfg" | head -1)
+    case "$_c" in
+        on) printf 'on'  ;;
+        *)  printf 'off' ;;
+    esac
+}
+
 # gag_workdir CMD -> prints the directory git will run in, resolving the two
 # common prefixes: `cd <path> && git ...` and `git -C <path> ...`. Falls back
 # to the current directory. Best-effort; unresolvable paths print nothing.
